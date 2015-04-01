@@ -150,4 +150,3 @@ Dir["plugins/*/lib"].each { |f| $LOAD_PATH << f } # treat included plugins like 
 
 Samson::Hooks.plugin_setup
 ActionDispatch::Reloader.to_prepare { Samson::Hooks.plugins.map(&:add_decorators) }
-

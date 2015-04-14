@@ -2,7 +2,7 @@ source 'https://rubygems.org'
 
 gem 'bundler'
 
-gem 'rails', '~> 4.2.0'
+gem 'rails', '~> 4.2.1'
 gem 'puma'
 gem 'dotenv-rails', '~> 0.9'
 
@@ -52,6 +52,7 @@ group :assets do
   gem 'ngannotate-rails'
   gem 'angular-rails-templates'
   gem 'underscore-rails'
+  gem 'sprockets', '< 3'
 end
 
 group :no_preload do

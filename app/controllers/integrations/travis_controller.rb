@@ -8,7 +8,7 @@ class Integrations::TravisController < Integrations::BaseController
   end
 
   def travis_authorization
-    Digest::SHA2.hexdigest("#{project.github_repo}#{ENV['TRAVIS_TOKEN']}")
+    Digest::SHA2.hexdigest("#{project.repo_name}#{ENV['TRAVIS_TOKEN']}")
   end
 
   def deploy?

@@ -8,7 +8,7 @@ class CommitStatusesController < ApplicationController
   private
 
   def commit_status
-    @commit_status ||= CommitStatus.new(project.github_repo, params[:ref])
+    @commit_status ||= CommitStatus.new(project.repo_name, params[:ref])
   end
 
   def project

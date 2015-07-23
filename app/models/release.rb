@@ -22,7 +22,7 @@ class Release < ActiveRecord::Base
   end
 
   def changeset
-    @changeset ||= Changeset.new(project.github_repo, previous_release.try(:commit), commit)
+    @changeset ||= Changeset.new(project.repo_name, previous_release.try(:commit), commit)
   end
 
   def previous_release

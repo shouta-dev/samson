@@ -13,7 +13,7 @@ class ReleaseService
   private
 
   def push_tag_to_git_repository(release)
-    GITHUB.create_release(@project.github_repo, release.version, target_commitish: release.commit)
+    GITHUB.create_release(@project.repo_name, release.version, target_commitish: release.commit)
   end
 
   def start_deploys(release)

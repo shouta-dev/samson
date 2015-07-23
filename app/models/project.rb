@@ -35,7 +35,7 @@ class Project < ActiveRecord::Base
       alphabetical
   }
 
-  def repo_name
+  def slug
     name.parameterize('_')
   end
 

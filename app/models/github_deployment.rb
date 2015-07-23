@@ -10,7 +10,7 @@ class GithubDeployment
   def create_github_deployment
     Rails.logger.info "Creating Github Deployment..."
 
-    GITHUB.create_deployment(@project.github_repo, @deploy.reference, deployment_options)
+    GITHUB.create_deployment(@project.repo_name, @deploy.reference, deployment_options)
   end
 
   def update_github_deployment_status(deployment)

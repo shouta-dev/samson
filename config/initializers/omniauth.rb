@@ -32,7 +32,7 @@ Rails.application.config.middleware.use OmniAuth::Builder do
   end
   
   provider :gitlab,
-    ENV["GITLAB_KEY"],
+    ENV["GITLAB_APPLICATION_ID"],
     ENV["GITLAB_SECRET"],
     client_options: {
        site: ENV["GITLAB_URL"],

@@ -5,7 +5,7 @@ module SamsonPipelines::StageConcern
   end
 
   def next_stages
-    Stage.find(next_stage_ids)
+    Stage.where(id: next_stage_ids).to_a
   end
 
   protected
@@ -29,5 +29,16 @@ module SamsonPipelines::StageConcern
       end
     end
     true
+  end
+
+  # Make sure that this stage isn't referenced by another stage in a pipeline.
+  # This will stop soft_deletion of the stage.
+  def verify_not_part_of_pipeline
+    project.stages.each do |s|
+      if s.next_stage_ids.include?(id)
+        errors[:base] << "Stage #{name} is in a pipeline from #{s.name} and cannot be deleted"
+        return false
+      end
+    end
   end
 end

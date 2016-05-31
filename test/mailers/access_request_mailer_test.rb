@@ -1,5 +1,7 @@
 require_relative '../test_helper'
 
+SingleCov.covered!
+
 describe AccessRequestMailer do
   include AccessRequestTestSupport
 
@@ -10,7 +12,7 @@ describe AccessRequestMailer do
     let(:hostname) { 'localhost' }
     let(:manager_email) { 'manager@example.com' }
     let(:reason) { 'Dummy reason.' }
-    let(:role) { ProjectRole::DEPLOYER }
+    let(:role) { Role::DEPLOYER }
     subject { ActionMailer::Base.deliveries.last }
 
     before do
@@ -24,7 +26,8 @@ describe AccessRequestMailer do
         Project.any_instance.stubs(:valid_repository_url).returns(true)
         Project.create!(name: 'Second project', repository_url: 'git://foo.com:hello/world.git')
         AccessRequestMailer.access_request_email(
-            hostname, user, manager_email, reason, Project.all.pluck(:id), role.id).deliver_now
+          hostname, user, manager_email, reason, Project.all.pluck(:id), role.id
+        ).deliver_now
       end
 
       it 'has correct sender and recipients' do
@@ -71,8 +74,11 @@ describe AccessRequestMailer do
     end
 
     describe 'single project' do
-      before { AccessRequestMailer.access_request_email(
-          hostname, user, manager_email, reason, [projects(:test).id], role.id).deliver_now }
+      before do
+        AccessRequestMailer.access_request_email(
+          hostname, user, manager_email, reason, [projects(:test).id], role.id
+        ).deliver_now
+      end
 
       it 'includes target project name in body' do
         subject.body.to_s.must_match /#{projects(:test).name}/

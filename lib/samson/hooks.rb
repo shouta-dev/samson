@@ -5,8 +5,15 @@ module Samson
 
     VIEW_HOOKS = [
       :stage_form,
+      :stage_show,
       :project_form,
+      :deploy_group_show,
+      :deploy_group_form,
+      :deploy_group_table_header,
+      :deploy_group_table_cell,
       :deploys_header,
+      :deploy_tab_nav,
+      :deploy_tab_body,
       :deploy_view,
       :deploy_form, # for external plugin, so they can add extra form fields
       :admin_menu,
@@ -29,11 +36,11 @@ module Samson
       :edit_deploy_group
     ].freeze
 
-    INTERNAL_HOOKS = [ :class_defined ]
+    INTERNAL_HOOKS = [:class_defined].freeze
 
     KNOWN = VIEW_HOOKS + EVENT_HOOKS + INTERNAL_HOOKS
 
-    @@hooks = {}
+    @hooks = {}
 
     class Plugin
       attr_reader :name, :folder
@@ -66,7 +73,7 @@ module Samson
       end
 
       def add_assets_to_precompile
-        engine.config.assets.precompile += %W(#{name}/application.css #{name}/application.js)
+        engine.config.assets.precompile += %W[#{name}/application.css #{name}/application.js]
       end
 
       def engine
@@ -158,23 +165,25 @@ module Samson
       def plugin_test_setup
         fixture_path = ActiveSupport::TestCase.fixture_path
         plugins.each do |plugin|
-          fixtures = Dir.glob(File.join(plugin.folder, 'test', 'fixtures', '*.yml'))
+          fixtures = Dir.glob(File.join(plugin.folder, 'test', 'fixtures', '*'))
           fixtures.each do |fixture|
-            yml_filename = fixture[/\w+\.yml\z/]
-            new_path = File.join(fixture_path, yml_filename)
+            next if !fixture.end_with?(".yml") && fixture.include?(".")
+            new_path = File.join(fixture_path, File.basename(fixture))
             File.symlink(fixture, new_path) unless File.exist?(new_path)
             Minitest.after_run { File.delete(new_path) if File.symlink?(new_path) }
           end
 
           # Load test_helper.rb if it exists
+          # TODO maybe not necessary ...
           test_helper_file = File.join(plugin.folder, 'test', 'test_helper.rb')
-          require test_helper_file if File.exists?(test_helper_file)
+          require test_helper_file if File.exist?(test_helper_file)
         end
       end
 
       def render_javascripts(view)
         Samson::Hooks.plugins.each do |plugin|
-          next unless File.exists?(plugin.engine.config.root.join("app/assets/javascripts/#{plugin.name}/application.js"))
+          js = plugin.engine.config.root.join("app/assets/javascripts/#{plugin.name}/application.js")
+          next unless File.exist?(js)
           view.concat(view.javascript_include_tag("#{plugin.name}/application.js"))
         end
         nil
@@ -182,7 +191,8 @@ module Samson
 
       def render_stylesheets(view)
         Samson::Hooks.plugins.each do |plugin|
-          next unless File.exists?(plugin.engine.config.root.join("app/assets/stylesheets/#{plugin.name}/application.css"))
+          css = plugin.engine.config.root.join("app/assets/stylesheets/#{plugin.name}/application.css")
+          next unless File.exist?(css)
           view.concat(view.stylesheet_link_tag("#{plugin.name}/application.css"))
         end
         nil
@@ -197,7 +207,7 @@ module Samson
 
       def hooks(*args)
         raise "Using unsupported hook #{args.inspect}" unless KNOWN.include?(args.first)
-        (@@hooks[args] ||= [])
+        (@hooks[args] ||= [])
       end
 
       # Loads the PLUGINS environment variable. See docs/plugins.md for more info.
@@ -224,12 +234,19 @@ end
 
 module Samson::LoadDecorators
   def inherited(subclass)
-    Samson::Hooks.load_decorators(subclass.name)
     super
+    Samson::Hooks.load_decorators(subclass.name)
   end
 end
 
 Samson::Hooks.plugin_setup
-ActiveRecord::Base.extend Samson::LoadDecorators
-ActionController::Base.extend Samson::LoadDecorators
-ActiveModel::Serializer.extend Samson::LoadDecorators
+
+class << ActiveRecord::Base
+  prepend Samson::LoadDecorators
+end
+class << ActionController::Base
+  prepend Samson::LoadDecorators
+end
+class << ActiveModel::Serializer
+  prepend Samson::LoadDecorators
+end

@@ -6,25 +6,35 @@ module Watchers
 
     finalizer :on_termination
 
+    class << self
+      def restart_watcher(project)
+        stop_watcher(project)
+        start_watcher(project)
+      end
+
+      private
+
+      def stop_watcher(project)
+        watcher = Celluloid::Actor[watcher_symbol(project)]
+        watcher.terminate if watcher && watcher.alive?
+      end
+
+      def watcher_symbol(project)
+        "deploy-watcher-#{project.id}".to_sym
+      end
+
+      def start_watcher(project)
+        watcher_name = watcher_symbol(project)
+        supervise as: watcher_name, args: [project]
+      end
+    end
+
+    private
+
     def initialize(project)
       @project = project
       @pod_timer = after(ENV.fetch('KUBERNETES_POD_TIMEOUT', 20.minutes).to_i) { pod_timeout }
       start_watching
-    end
-
-    def self.watcher_symbol(project)
-      "deploy-watcher-#{project.id}".to_sym
-    end
-
-    def self.start_watcher(project)
-      watcher_name = watcher_symbol(project)
-      supervise as: watcher_name, args: [project]
-    end
-
-    def self.restart_watcher(project)
-      watcher = Actor[watcher_symbol(project)]
-      watcher.terminate if watcher and watcher.alive?
-      start_watcher(project)
     end
 
     def start_watching
@@ -41,14 +51,12 @@ module Watchers
       event = message.event
       debug "Got message on topic: #{topic}. Type of message: #{event.kind}"
 
-      case
-      when event.kind == 'Event' then handle_cluster_event(message)
-      when event.kind == 'Pod' then handle_pod_event(message)
+      case event.kind
+      when 'Event' then handle_cluster_event(message)
+      when 'Pod' then handle_pod_event(message)
       else error "Object kind not yet supported: #{event.kind}"
       end
     end
-
-    private
 
     # Gets the database in-sync with the Kubernetes Cluster
     def sync_with_cluster

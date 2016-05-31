@@ -1,7 +1,8 @@
-//= require typeahead
+//= require typeahead.js.js
 //= require changesets
 
-var following = true;
+var following = true; // shared with stream.js
+
 $(function () {
   // Shows confirmation dropdown using Github comparison
   var changesetLoaded = false,
@@ -12,7 +13,8 @@ $(function () {
       $submit = $form.find('input[type=submit]'),
       $reference = $("#deploy_reference"),
       $ref_problem_list = $("#ref-problem-list"),
-      $ref_status_label = $("#ref-problem-warning");
+      $ref_status_label = $("#ref-problem-warning"),
+      $messages = $("#messages");
 
   $("#deploy-tabs a[data-type=github]").click(function (e) {
       e.preventDefault();
@@ -191,15 +193,14 @@ $(function () {
   });
 
   function shrinkOutput() {
-    $("#messages").css("max-height", 550);
+    $messages.css("max-height", 550);
   }
 
-  $("#output-follow").click(function(event) {
+  $("#output-follow").click(function() {
     following = true;
 
     shrinkOutput();
 
-    var $messages = $("#messages");
     $messages.scrollTop($messages.prop("scrollHeight"));
 
     $("#output-options > button, #output-grow-toggle").removeClass("active");
@@ -207,10 +208,10 @@ $(function () {
   });
 
   function growOutput() {
-    $("#messages").css("max-height", "none");
+    $messages.css("max-height", "none");
   }
 
-  $("#output-grow-toggle").click(function(event) {
+  $("#output-grow-toggle").click(function() {
     var $self = $(this);
 
     if($self.hasClass("active")) {
@@ -222,7 +223,7 @@ $(function () {
     }
   });
 
-  $("#output-grow").click(function(event) {
+  $("#output-grow").click(function() {
     growOutput();
 
     $("#output-options > button").removeClass("active");
@@ -230,7 +231,7 @@ $(function () {
     $("#output-grow-toggle").addClass("active");
   });
 
-  $("#output-steady").click(function(event) {
+  $("#output-steady").click(function() {
     following = false;
 
     shrinkOutput();
@@ -240,13 +241,102 @@ $(function () {
   });
 
   // If there are messages being streamed, then show the output and hide buddy check
-  $('#messages').bind('contentchanged', function() {
+  $messages.bind('contentchanged', function() {
     var $output = $('#output');
     if ($output.find('.output').hasClass("hidden") ){
       $output.find('.output').removeClass('hidden');
       $output.find('.deploy-check').hide();
     }
   });
+
+  // when user scrolls all the way down, start following
+  // when user scrolls up, stop following since it would cause jumping
+  // (adds 30 px wiggle room since the math does not quiet add up)
+  $messages.scroll(function() {
+    var position = $messages.prop("scrollHeight") - $messages.scrollTop() - $messages.height() - 30;
+    if(position > 0 && following) {
+      $("#output-steady").click();
+    } else if (position < 0 && !following) {
+      $("#output-follow").click();
+    }
+  });
+
+  (function() {
+    var HASH_REGEX = /^#L(\d+)(?:-L(\d+))?$/;
+    var $highlightedLines;
+    var LINES_SELECTOR = '#messages span';
+
+    function linesFromHash() {
+      var result = HASH_REGEX.exec(window.location.hash);
+      if (result === null) {
+        return [];
+      } else {
+        return result.slice(1);
+      }
+    }
+
+    function addHighlight(start, end) {
+      if (!start) {
+        return;
+      }
+      start = Number(start) - 1;
+      if (end) {
+        end = Number(end);
+      } else {
+        end = start + 1;
+      }
+      $highlightedLines = $(LINES_SELECTOR).slice(start, end).addClass('highlighted');
+    }
+
+    function removeHighlight() {
+      if ($highlightedLines) {
+        $highlightedLines.removeClass('highlighted');
+      }
+    }
+
+    function highlightAndScroll() {
+      highlight();
+      scroll();
+    }
+
+    function scroll() {
+      if ($highlightedLines) {
+        $highlightedLines.get(0).scrollIntoView(true);
+      }
+    }
+
+    function highlight() {
+      removeHighlight();
+      var nextLines = linesFromHash();
+      addHighlight.apply(this, nextLines);
+    }
+
+    function indexOfLine() {
+      // the jQuery map passes an index before the element
+      var line = arguments[arguments.length - 1];
+      return $(line).index(LINES_SELECTOR) + 1;
+    }
+
+    $('#messages').on('click', 'span', function(event) {
+      event.preventDefault();
+      var clickedNumber = indexOfLine($(event.currentTarget));
+      var shift = event.shiftKey;
+      if (shift && $highlightedLines.length) {
+        var requestedLines = $highlightedLines.map(indexOfLine);
+        requestedLines.push(clickedNumber);
+        requestedLines = requestedLines.sort(function(a, b) {
+          return a - b;
+        });
+        var end = requestedLines.length - 1;
+        window.location.hash = 'L' + requestedLines[0] + '-L' + requestedLines[end];
+      } else {
+        window.location.hash = 'L' + clickedNumber;
+      }
+      highlight();
+    });
+
+    highlightAndScroll();
+  }());
 });
 
 function toggleOutputToolbar() {

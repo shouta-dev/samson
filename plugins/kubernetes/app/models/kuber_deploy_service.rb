@@ -26,23 +26,15 @@ class KuberDeployService
   def create_deployments!
     kuber_release.release_docs.each do |release_doc|
       log 'creating Deployment', role: release_doc.kubernetes_role.name
-      release_doc.deploy_to_kubernetes
+      release_doc.deploy
     end
   end
 
   def create_services!
     kuber_release.release_docs.each do |release_doc|
+      status = release_doc.ensure_service
       role = release_doc.kubernetes_role
-      service = release_doc.service
-
-      if service.nil?
-        log 'no Service defined', role: role.name
-      elsif service.running?
-        log 'Service already running', role: role.name, service_name: service.name
-      else
-        log 'creating Service', role: role.name, service_name: service.name
-        release_doc.client.create_service(Kubeclient::Service.new(release_doc.service_hash))
-      end
+      log status, role: role.name, service_name: release_doc.kubernetes_role.service_name
     end
   end
 
@@ -53,10 +45,8 @@ class KuberDeployService
   private
 
   def log(msg, extra_info = {})
-    extra_info.merge!(
-      release: kuber_release.id,
-      project: project.name
-    )
+    extra_info[:release] = kuber_release.id
+    extra_info[:project] = project.name
 
     Kubernetes::Util.log msg, extra_info
   end

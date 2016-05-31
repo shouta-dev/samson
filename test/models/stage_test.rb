@@ -1,5 +1,7 @@
 require_relative '../test_helper'
 
+SingleCov.covered! uncovered: 8
+
 describe Stage do
   subject { stages(:test_staging) }
   let(:stage) { subject }
@@ -17,11 +19,36 @@ describe Stage do
     end
   end
 
+  describe '.reset_order' do
+    let(:project) { projects(:test) }
+    let(:stage1) { Stage.create!(project: project, name: 'stage1', order: 1) }
+    let(:stage2) { Stage.create!(project: project, name: 'stage2', order: 2) }
+    let(:stage3) { Stage.create!(project: project, name: 'stage3', order: 3) }
+
+    it 'updates the order on stages' do
+      Stage.reset_order [stage3.id, stage2.id, stage1.id]
+
+      stage1.reload.order.must_equal 2
+      stage2.reload.order.must_equal 1
+      stage3.reload.order.must_equal 0
+    end
+
+    it 'succeeds even if a stages points to a deleted stage' do
+      stage1.update! next_stage_ids: [stage3.id]
+      stage3.soft_delete!
+
+      Stage.reset_order [stage2.id, stage1.id]
+
+      stage1.reload.order.must_equal 1
+      stage2.reload.order.must_equal 0
+    end
+  end
+
   describe '#command' do
     describe 'adding a built command' do
       before do
-        subject.stage_commands.build(command:
-          Command.new(command: 'test')
+        subject.command_associations.build(
+          command: Command.new(command: 'test')
         )
 
         subject.command_ids = [commands(:echo).id]
@@ -30,7 +57,7 @@ describe Stage do
       end
 
       it 'add new command to the end' do
-        subject.command.must_equal("#{commands(:echo).command}\ntest")
+        subject.script.must_equal("#{commands(:echo).command}\ntest")
       end
     end
 
@@ -44,7 +71,7 @@ describe Stage do
       end
 
       it 'joins all commands based on position' do
-        subject.command.must_equal("test\n#{commands(:echo).command}")
+        subject.script.must_equal("test\n#{commands(:echo).command}")
       end
     end
 
@@ -52,7 +79,7 @@ describe Stage do
       before { subject.commands.clear }
 
       it 'is empty' do
-        subject.command.must_be_empty
+        subject.script.must_be_empty
       end
     end
   end
@@ -92,7 +119,7 @@ describe Stage do
     it 'returns the last successful deploy for the stage' do
       successful_job = project.jobs.create!(command: 'cat foo', user: users(:deployer), status: 'succeeded')
       stage.deploys.create!(reference: 'master', job: successful_job)
-      job = project.jobs.create!(command: 'cat foo', user: users(:deployer), status: 'failed')
+      project.jobs.create!(command: 'cat foo', user: users(:deployer), status: 'failed')
       deploy = stage.deploys.create!(reference: 'master', job: successful_job)
       assert_equal deploy, stage.last_successful_deploy
     end
@@ -127,19 +154,26 @@ describe Stage do
     let(:user) { users(:deployer) }
 
     it "creates a new deploy" do
-      deploy = subject.create_deploy(user, {reference: "foo"})
+      deploy = subject.create_deploy(user, reference: "foo")
       deploy.reference.must_equal "foo"
+      deploy.release.must_equal true
     end
 
     it "creates a new job" do
-      deploy = subject.create_deploy(user, {reference: "foo"})
+      deploy = subject.create_deploy(user, reference: "foo")
       deploy.job.user.must_equal user
     end
 
     it "creates neither job nor deploy if one fails to save" do
       assert_no_difference "Deploy.count + Job.count" do
-        subject.create_deploy(user, {reference: ""})
+        subject.create_deploy(user, reference: "")
       end
+    end
+
+    it "creates a no-release deploy when stage was configured to not deploy code" do
+      subject.no_code_deployed = true
+      deploy = subject.create_deploy(user, reference: "foo")
+      deploy.release.must_equal false
     end
   end
 
@@ -171,35 +205,6 @@ describe Stage do
     it "returns email addresses separated by a semicolon" do
       stage = Stage.new(notify_email_address: "a@foo.com; b@foo.com")
       stage.notify_email_addresses.must_equal ["a@foo.com", "b@foo.com"]
-    end
-  end
-
-  describe '#all_commands' do
-    describe 'with commands' do
-      before do
-        Command.create!(command: 'test')
-      end
-
-      it 'includes all commands, sorted' do
-        subject.all_commands.must_equal(subject.commands + Command.global)
-      end
-    end
-
-    describe 'no commands' do
-      let(:project) { projects(:test) }
-      subject { project.stages.build }
-
-      it 'includes all commands' do
-        subject.all_commands.must_equal(Command.for_project(project))
-      end
-    end
-
-    describe 'no project' do
-      subject { Stage.new }
-
-      it 'includes all commands' do
-        subject.all_commands.must_equal(Command.global)
-      end
     end
   end
 
@@ -267,39 +272,10 @@ describe Stage do
     end
   end
 
-  describe "#datadog_tags_as_array" do
-    it "returns an array of the tags" do
-      subject.datadog_tags = " foo; bar; baz "
-      subject.datadog_tags_as_array.must_equal ["foo", "bar", "baz"]
-    end
-
-    it "uses only semicolon as separate" do
-      subject.datadog_tags = " foo bar: baz "
-      subject.datadog_tags_as_array.must_equal ["foo bar: baz"]
-    end
-
-    it "returns an empty array if no tags have been configured" do
-      subject.datadog_tags = nil
-      subject.datadog_tags_as_array.must_equal []
-    end
-  end
-
-  describe "#send_datadog_notifications?" do
-    it "returns true if the stage has a Datadog tag configured" do
-      subject.datadog_tags = "env:beta"
-      subject.send_datadog_notifications?.must_equal true
-    end
-
-    it "returns false if the stage does not have a Datadog tag configured" do
-      subject.datadog_tags = nil
-      subject.send_datadog_notifications?.must_equal false
-    end
-  end
-
   describe "#automated_failure_emails" do
     let(:user) { users(:super_admin) }
     let(:deploy) do
-      deploy = subject.create_deploy(user, {reference: "commita"})
+      deploy = subject.create_deploy(user, reference: "commita")
       deploy.job.fail!
       deploy
     end
@@ -359,8 +335,6 @@ describe Stage do
     before do
       subject.notify_email_address = "test@test.ttt"
       subject.flowdock_flows = [FlowdockFlow.new(name: "test", token: "abcxyz", stage_id: subject.id)]
-      subject.datadog_tags = "xyz:abc"
-      subject.new_relic_applications = [NewRelicApplication.new(name: "test", stage_id: subject.id)]
       subject.save
 
       @clone = Stage.build_clone(subject)
@@ -370,16 +344,11 @@ describe Stage do
       @clone.attributes.except("id").must_equal subject.attributes.except("id")
       @clone.id.wont_equal subject.id
     end
-
-    it "copies over the new relic applications" do
-      assert_equal @clone.new_relic_applications.map { |n| n.attributes.except("stage_id", "id") },
-        subject.new_relic_applications.map { |n| n.attributes.except("stage_id", "id") }
-    end
   end
 
-  describe 'production flag' do
+  describe '#production?' do
     let(:stage) { stages(:test_production) }
-    before { DeployGroup.stubs(:enabled?).returns(true) }
+    before { DeployGroup.stubs(enabled?: true) }
 
     it 'is true for stage with production deploy_group' do
       stage.update!(production: false)
@@ -397,23 +366,20 @@ describe Stage do
       stage.production?.must_equal false
     end
 
-    it 'fallbacks to production field for stage with no deploy groups' do
-      stage.update!(production: true)
+    it 'fallbacks to production field when deploy groups was enabled without selecting deploy groups' do
       stage.deploy_groups = []
+      stage.update!(production: true)
       stage.production?.must_equal true
       stage.update!(production: false)
       stage.production?.must_equal false
     end
-  end
 
-  describe '#datadog_monitors' do
-    it "is empty by default" do
-      stage.datadog_monitors.must_equal []
-    end
-
-    it "builds multiple monitors" do
-      stage.datadog_monitor_ids = "1,2, 4"
-      stage.datadog_monitors  .map(&:id).must_equal [1,2,4]
+    it 'fallbacks to production field when deploy groups was disabled' do
+      DeployGroup.stubs(enabled?: false)
+      stage.update!(production: true)
+      stage.production?.must_equal true
+      stage.update!(production: false)
+      stage.production?.must_equal false
     end
   end
 
@@ -425,6 +391,83 @@ describe Stage do
       stage.save
       stage_updated_at.wont_equal stage.updated_at
       project_updated_at.wont_equal stage.project.updated_at
+    end
+  end
+
+  describe "#ensure_ordering" do
+    it "puts new stages to the back" do
+      new = stage.project.stages.create! name: 'Newish'
+      new.order.must_equal 1
+    end
+  end
+
+  describe "#destroy" do
+    it "soft deletes all it's StageCommand" do
+      assert_difference "StageCommand.count", -1 do
+        stage.soft_delete!
+      end
+
+      assert_difference "StageCommand.count", +1 do
+        stage.soft_undelete!
+      end
+    end
+  end
+
+  describe "#command_updated_at" do
+    let(:t) { 3.seconds.from_now }
+
+    it "is nil for new" do
+      Stage.new.command_updated_at.must_equal nil
+    end
+
+    it "ignores updated_at since that is changed on every deploy" do
+      stage.command_associations.clear
+      stage.command_updated_at.must_equal nil
+    end
+
+    it "is updated when command content changed" do
+      stage.commands.first.update_column(:updated_at, t)
+      stage.command_updated_at.to_i.must_equal t.to_i
+    end
+
+    it "is updated when a new command was added" do
+      stage.command_associations.first.update_column(:updated_at, t)
+      stage.command_updated_at.to_i.must_equal t.to_i
+    end
+  end
+
+  describe "versioning" do
+    around { |t| PaperTrail.with_logging(&t) }
+
+    it "tracks important changes" do
+      stage.update_attribute(:name, "Foo")
+      stage.versions.size.must_equal 1
+    end
+
+    it "ignores unimportant changes" do
+      stage.update_attributes(order: 5, updated_at: 1.second.from_now)
+      stage.versions.size.must_equal 0
+    end
+
+    it "records script" do
+      stage.record_script_change
+      YAML.load(stage.versions.first.object)['script'].must_equal stage.script
+    end
+
+    it "can restore ... but loses script" do
+      old_name = stage.name
+      stage.record_script_change
+      stage.update_column(:name, "NEW-NAME")
+      stage.commands.first.update_column(:command, 'NEW')
+      stage.versions.last.reify.save!
+      stage.reload
+      stage.name.must_equal old_name
+      stage.script.must_equal 'NEW'
+    end
+
+    it "does not trigger multiple times when destroying" do
+      stage.destroy
+      stage.versions.size.must_equal 1
     end
   end
 end

@@ -1,4 +1,7 @@
+# rubocop:disable Metrics/LineLength
 require_relative "../test_helper"
+
+SingleCov.covered!
 
 describe JenkinsHelper do
   def stub_jenkins_job(status, url)
@@ -10,7 +13,7 @@ describe JenkinsHelper do
   end
 
   def stub_build_detail(result)
-    stub_request(:get, "http://user%40test.com:japikey@www.test-url.com/job/test_job/111//api/json").
+    stub_request(:get, "http://www.test-url.com/job/test_job/111//api/json").with(headers: {'Authorization' => 'Basic dXNlckB0ZXN0LmNvbTpqYXBpa2V5'}).
       to_return(status: 200, body: build_detail_response.merge("result" => result).to_json, headers: {}).to_timeout
   end
 

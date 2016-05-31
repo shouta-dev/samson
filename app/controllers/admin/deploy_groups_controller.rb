@@ -1,26 +1,28 @@
 class Admin::DeployGroupsController < ApplicationController
   before_action :authorize_admin!
-  before_action :authorize_super_admin!, only: [ :create, :new, :update, :destroy, :deploy_all, :deploy_all_now ]
+  before_action :authorize_super_admin!, only: [:create, :new, :update, :destroy, :deploy_all, :deploy_all_now, :edit]
   before_action :deploy_group, only: [:show, :edit, :update, :destroy, :deploy_all, :deploy_all_now]
 
   def index
-    @deploy_groups = DeployGroup.all
+    @deploy_groups = DeployGroup.all.sort_by(&:natural_order)
+  end
+
+  def show
   end
 
   def new
     @deploy_group = DeployGroup.new
     Samson::Hooks.fire(:edit_deploy_group, @deploy_group)
-    render 'edit'
+    render :edit
   end
 
   def create
     @deploy_group = DeployGroup.create(deploy_group_params)
     if @deploy_group.persisted?
       flash[:notice] = "Successfully created deploy group: #{@deploy_group.name}"
-      redirect_to action: 'index'
+      redirect_to action: :index
     else
-      flash[:error] = @deploy_group.errors.full_messages
-      render 'edit'
+      render :edit
     end
   end
 
@@ -31,22 +33,23 @@ class Admin::DeployGroupsController < ApplicationController
   def update
     if deploy_group.update_attributes(deploy_group_params)
       flash[:notice] = "Successfully saved deploy group: #{deploy_group.name}"
-      redirect_to action: 'index'
+      redirect_to action: :index
     else
-      flash[:error] = deploy_group.errors.full_messages
-      render 'edit'
+      render :edit
     end
   end
 
   def destroy
     deploy_group.soft_delete!
     flash[:notice] = "Successfully deleted deploy group: #{deploy_group.name}"
-    redirect_to action: 'index'
+    redirect_to action: :index
   end
 
   def deploy_all
     @stages = Project.all.flat_map do |project|
-      stages = stages_in_same_environment(project)
+      environment = Environment.find(params[:environment_id]) if params[:environment_id]
+
+      stages = stages_in_same_environment(project, environment)
       next unless deploy = stages.map(&:last_successful_deploy).compact.sort_by(&:created_at).last
       stages.map { |s| [s, deploy] }
     end.compact
@@ -69,11 +72,13 @@ class Admin::DeployGroupsController < ApplicationController
     stage.deploy_groups.map(&:id) == [deploy_group.id]
   end
 
-  def stages_in_same_environment(project)
-    project.stages.select do |stage|
-      stage.command.include?("$DEPLOY_GROUPS") && # is dynamic
-        stage.deploy_groups.where(environment: deploy_group.environment).exists? # is made to go to this environment
-    end.sort_by { |stage| only_to_current_group?(stage) ? 0 : 1 }
+  def stages_in_same_environment(project, environment)
+    environment ||= deploy_group.environment
+    stages = project.stages.select do |stage|
+      stage.script.include?("$DEPLOY_GROUPS") && # is dynamic
+        stage.deploy_groups.where(environment: environment).exists? # is made to go to this environment
+    end
+    stages.sort_by { |stage| only_to_current_group?(stage) ? 0 : 1 }
   end
 
   def new_stage_with_group(stage)

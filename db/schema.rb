@@ -11,20 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20151211031950) do
-
-  create_table "build_statuses", force: :cascade do |t|
-    t.integer  "build_id",                                     null: false
-    t.string   "source",     limit: 255
-    t.string   "status",     limit: 255,   default: "pending", null: false
-    t.string   "url",        limit: 255
-    t.string   "summary",    limit: 512
-    t.text     "data",       limit: 65535
-    t.datetime "created_at"
-    t.datetime "updated_at"
-  end
-
-  add_index "build_statuses", ["build_id"], name: "index_build_statuses_on_build_id", using: :btree
+ActiveRecord::Schema.define(version: 20160523234717) do
 
   create_table "builds", force: :cascade do |t|
     t.integer  "project_id",                       null: false
@@ -51,6 +38,14 @@ ActiveRecord::Schema.define(version: 20151211031950) do
     t.datetime "created_at"
     t.datetime "updated_at"
     t.integer  "project_id", limit: 4
+  end
+
+  create_table "csv_exports", force: :cascade do |t|
+    t.integer  "user_id",    limit: 4,                       null: false
+    t.datetime "created_at",                                 null: false
+    t.datetime "updated_at",                                 null: false
+    t.string   "filters",    limit: 255, default: "{}",      null: false
+    t.string   "status",     limit: 255, default: "pending", null: false
   end
 
   create_table "deploy_groups", force: :cascade do |t|
@@ -84,6 +79,8 @@ ActiveRecord::Schema.define(version: 20151211031950) do
     t.datetime "started_at"
     t.datetime "deleted_at"
     t.integer  "build_id",   limit: 4
+    t.boolean  "release",                default: false, null: false
+    t.boolean  "kubernetes",             default: false, null: false
   end
 
   add_index "deploys", ["build_id"], name: "index_deploys_on_build_id", using: :btree
@@ -110,12 +107,12 @@ ActiveRecord::Schema.define(version: 20151211031950) do
   add_index "environment_variables", ["parent_id", "parent_type", "name", "scope_type", "scope_id"], name: "environment_variables_unique_scope", unique: true, length: {"parent_id"=>nil, "parent_type"=>191, "name"=>191, "scope_type"=>191, "scope_id"=>nil}, using: :btree
 
   create_table "environments", force: :cascade do |t|
-    t.string   "name",          limit: 255,                 null: false
-    t.boolean  "is_production", default: false, null: false
+    t.string   "name",       limit: 255,                 null: false
+    t.boolean  "production",             default: false, null: false
     t.datetime "deleted_at"
-    t.datetime "created_at",                                null: false
-    t.datetime "updated_at",                                null: false
-    t.string   "permalink",     limit: 255,                 null: false
+    t.datetime "created_at",                             null: false
+    t.datetime "updated_at",                             null: false
+    t.string   "permalink",  limit: 255,                 null: false
   end
 
   add_index "environments", ["permalink"], name: "index_environments_on_permalink", unique: true, length: {"permalink"=>191}, using: :btree
@@ -178,6 +175,18 @@ ActiveRecord::Schema.define(version: 20151211031950) do
     t.string   "config_context",  limit: 255
   end
 
+  create_table "kubernetes_deploy_group_roles", force: :cascade do |t|
+    t.integer "project_id",         limit: 4,                         null: false
+    t.integer "deploy_group_id",    limit: 4,                         null: false
+    t.integer "replicas",           limit: 4,                         null: false
+    t.integer "ram",                limit: 4,                         null: false
+    t.decimal "cpu",                          precision: 4, scale: 2, null: false
+    t.integer "kubernetes_role_id", limit: 4,                         null: false
+  end
+
+  add_index "kubernetes_deploy_group_roles", ["deploy_group_id"], name: "index_kubernetes_deploy_group_roles_on_deploy_group_id", using: :btree
+  add_index "kubernetes_deploy_group_roles", ["project_id", "deploy_group_id", "kubernetes_role_id"], name: "index_kubernetes_deploy_group_roles_on_project_id", using: :btree
+
   create_table "kubernetes_release_docs", force: :cascade do |t|
     t.integer  "kubernetes_role_id",          limit: 4,                         null: false
     t.integer  "kubernetes_release_id",       limit: 4,                         null: false
@@ -189,6 +198,8 @@ ActiveRecord::Schema.define(version: 20151211031950) do
     t.datetime "created_at"
     t.datetime "updated_at"
     t.integer  "deploy_group_id"
+    t.decimal  "cpu",                                       precision: 4, scale: 2,                     null: false
+    t.integer  "ram",                         limit: 4,                                                 null: false
   end
 
   add_index "kubernetes_release_docs", ["kubernetes_release_id"], name: "index_kubernetes_release_docs_on_kubernetes_release_id", using: :btree
@@ -202,25 +213,25 @@ ActiveRecord::Schema.define(version: 20151211031950) do
     t.datetime "updated_at"
     t.integer  "build_id"
     t.integer  "user_id"
+    t.integer  "project_id",         limit: 4,                       null: false
+    t.integer  "deploy_id",          limit: 4
   end
 
   add_index "kubernetes_releases", ["build_id"], name: "index_kubernetes_releases_on_build_id"
 
   create_table "kubernetes_roles", force: :cascade do |t|
-    t.integer  "project_id",      limit: 4,                           null: false
-    t.string   "name",            limit: 255,                         null: false
+    t.integer  "project_id",      limit: 4,   null: false
+    t.string   "name",            limit: 255, null: false
     t.string   "config_file",     limit: 255
-    t.integer  "replicas",        limit: 4,                           null: false
-    t.integer  "ram",             limit: 4,                           null: false
-    t.decimal  "cpu",                         precision: 4, scale: 2, null: false
     t.string   "service_name",    limit: 255
-    t.string   "deploy_strategy", limit: 255,                         null: false
-    t.datetime "created_at",                                          null: false
-    t.datetime "updated_at",                                          null: false
+    t.string   "deploy_strategy", limit: 255, null: false
+    t.datetime "created_at",                  null: false
+    t.datetime "updated_at",                  null: false
     t.datetime "deleted_at"
   end
 
   add_index "kubernetes_roles", ["project_id"], name: "index_kubernetes_roles_on_project_id", using: :btree
+  add_index "kubernetes_roles", ["service_name", "deleted_at"], name: "index_kubernetes_roles_on_service_name_and_deleted_at", unique: true, length: {"service_name"=>191, "deleted_at"=>nil}, using: :btree
 
   create_table "locks", force: :cascade do |t|
     t.integer  "stage_id",    limit: 4
@@ -244,11 +255,9 @@ ActiveRecord::Schema.define(version: 20151211031950) do
   end
 
   create_table "macros", force: :cascade do |t|
-    t.string   "name",       limit: 255,   null: false
-    t.string   "reference",  limit: 255,   null: false
-    t.text     "command",    limit: 65535, null: false
+    t.string   "name",       limit: 255, null: false
+    t.string   "reference",  limit: 255, null: false
     t.integer  "project_id", limit: 4
-    t.integer  "user_id",    limit: 4
     t.datetime "deleted_at"
     t.datetime "created_at"
     t.datetime "updated_at"
@@ -303,6 +312,18 @@ ActiveRecord::Schema.define(version: 20151211031950) do
   add_index "releases", ["build_id"], name: "index_releases_on_build_id", using: :btree
   add_index "releases", ["project_id", "number"], name: "index_releases_on_project_id_and_number", unique: true, using: :btree
 
+  create_table "secrets", id: false, force: :cascade do |t|
+    t.string   "id",                 limit: 255
+    t.string   "encrypted_value",    limit: 255, null: false
+    t.string   "encrypted_value_iv", limit: 255, null: false
+    t.string   "encryption_key_sha", limit: 255, null: false
+    t.integer  "updater_id",         limit: 4,   null: false
+    t.integer  "creator_id",         limit: 4,   null: false
+    t.datetime "created_at",                     null: false
+    t.datetime "updated_at",                     null: false
+  end
+
+
   create_table "slack_channels", force: :cascade do |t|
     t.string   "name",       limit: 255, null: false
     t.string   "channel_id", limit: 255, null: false
@@ -312,6 +333,7 @@ ActiveRecord::Schema.define(version: 20151211031950) do
   end
 
   add_index "slack_channels", ["stage_id"], name: "index_slack_channels_on_stage_id", using: :btree
+  add_index "secrets", ["id"], name: "index_secrets_on_id", unique: true, length: {"id"=>191}, using: :btree
 
   create_table "slack_webhooks", force: :cascade do |t|
     t.text     "webhook_url", limit: 65535, null: false
@@ -329,6 +351,7 @@ ActiveRecord::Schema.define(version: 20151211031950) do
     t.integer  "position",   limit: 4, default: 0, null: false
     t.datetime "created_at"
     t.datetime "updated_at"
+    t.datetime "deleted_at"
   end
 
   create_table "stages", force: :cascade do |t|
@@ -353,6 +376,9 @@ ActiveRecord::Schema.define(version: 20151211031950) do
     t.string   "datadog_monitor_ids",                          limit: 255
     t.string   "jenkins_job_names",                            limit: 255
     t.string   "next_stage_ids"
+    t.boolean  "no_code_deployed",                                           default: false
+    t.boolean  "docker_binary_plugin_enabled",                               default: true
+    t.boolean  "kubernetes",                                                 default: false, null: false
   end
 
   add_index "stages", ["project_id", "permalink", "deleted_at"], name: "index_stages_on_project_id_and_permalink_and_deleted_at", length: {"project_id"=>nil, "permalink"=>191, "deleted_at"=>nil}, using: :btree
@@ -375,7 +401,7 @@ ActiveRecord::Schema.define(version: 20151211031950) do
   end
 
   add_index "user_project_roles", ["project_id"], name: "index_user_project_roles_on_project_id"
-  add_index "user_project_roles", ["user_id"], name: "index_user_project_roles_on_user_id"
+  add_index "user_project_roles", ["user_id", "project_id"], name: "index_user_project_roles_on_user_id_and_project_id", unique: true, using: :btree
 
   create_table "users", force: :cascade do |t|
     t.string   "name",           limit: 255,                 null: false
@@ -389,9 +415,21 @@ ActiveRecord::Schema.define(version: 20151211031950) do
     t.boolean  "desktop_notify", default: false
     t.boolean  "integration",    default: false, null: false
     t.boolean  "access_request_pending",     default: false
+    t.string   "time_format",            limit: 255, default: "relative", null: false
   end
 
   add_index "users", ["external_id", "deleted_at"], name: "index_users_on_external_id_and_deleted_at", length: {"external_id"=>191, "deleted_at"=>nil}, using: :btree
+
+  create_table "versions", force: :cascade do |t|
+    t.string   "item_type",  limit: 255,        null: false
+    t.integer  "item_id",    limit: 4,          null: false
+    t.string   "event",      limit: 255,        null: false
+    t.string   "whodunnit",  limit: 255
+    t.text     "object",     limit: 1073741823
+    t.datetime "created_at"
+  end
+
+  add_index "versions", ["item_type", "item_id"], name: "index_versions_on_item_type_and_item_id", length: {"item_type"=>191, "item_id"=>nil}, using: :btree
 
   create_table "webhooks", force: :cascade do |t|
     t.integer  "project_id", limit: 4,   null: false

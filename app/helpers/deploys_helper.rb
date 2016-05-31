@@ -20,7 +20,7 @@ module DeploysHelper
       output << render('queued')
     end
 
-    output << render('output', deploy: @deploy, project: @project, hide: output_hidden)
+    output << render('shared/output', deployable: @deploy, job: @deploy.job, project: @project, hide: output_hidden)
   end
 
   def deploy_running?
@@ -29,10 +29,6 @@ module DeploysHelper
 
   def deploy_queued?
     @deploy.pending? && JobExecution.queued?(@deploy.job_id, key: @deploy.stage_id)
-  end
-
-  def newrelic_enabled_for_deploy?
-    NewRelicApi.api_key.present? && @deploy.stage.new_relic_applications.any?
   end
 
   def deploy_page_title
@@ -60,7 +56,7 @@ module DeploysHelper
   end
 
   def github_users(users)
-    users.map {|user| github_user_avatar(user) }.join(" ").html_safe
+    users.map { |user| github_user_avatar(user) }.join(" ").html_safe
   end
 
   def github_user_avatar(user)
@@ -71,7 +67,7 @@ module DeploysHelper
     end
   end
 
-  def buddy_check_button(project, deploy)
+  def buddy_check_button(_project, deploy)
     return unless deploy.waiting_for_buddy?
 
     button_class = ['btn']
@@ -84,7 +80,11 @@ module DeploysHelper
       button_class << 'btn-primary'
     end
 
-    link_to button_text, buddy_check_project_deploy_path(@project, @deploy), method: :post, class: button_class.join(' ')
+    link_to(
+      button_text,
+      buddy_check_project_deploy_path(@project, @deploy),
+      method: :post, class: button_class.join(' ')
+    )
   end
 
   def syntax_highlight(code, language = :ruby)
@@ -99,6 +99,10 @@ module DeploysHelper
 
   def stop_button(deploy: @deploy, **options)
     return unless @project && deploy
-    link_to 'Stop', [@project, deploy], options.merge(method: :delete, class: options.fetch(:class, 'btn btn-danger btn-xl'))
+    link_to(
+      'Stop',
+      [@project, deploy],
+      options.merge(method: :delete, class: options.fetch(:class, 'btn btn-danger btn-xl'))
+    )
   end
 end

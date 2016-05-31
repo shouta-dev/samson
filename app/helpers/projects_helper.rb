@@ -36,11 +36,21 @@ module ProjectsHelper
     end
   end
 
-  def is_user_admin_for_project?
-    current_user.is_admin? || current_user.is_admin_for?(@project)
+  def admin_for_project?
+    current_user.admin_for?(@project)
   end
 
-  def is_user_deployer_for_project?
-    current_user.is_deployer? || current_user.is_deployer_for?(@project)
+  def deployer_for_project?
+    current_user.deployer_for?(@project)
+  end
+
+  def repository_web_link(project)
+    if project.github?
+      render partial: 'shared/github_link', locals: { project: project }
+    elsif project.gitlab?
+      render partial: 'shared/gitlab_link', locals: { project: project }
+    else
+      ""
+    end
   end
 end

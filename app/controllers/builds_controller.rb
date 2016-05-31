@@ -1,5 +1,5 @@
 class BuildsController < ApplicationController
-  include ProjectLevelAuthorization
+  include CurrentProject
 
   before_action :authorize_project_deployer!
 
@@ -30,12 +30,12 @@ class BuildsController < ApplicationController
         if @build.persisted?
           redirect_to [current_project, @build]
         else
-          render :new, status: 422
+          render :new, status: :unprocessable_entity
         end
       end
 
       format.json do
-        render json: {}, status: @build.persisted? ? 200 : 422
+        render json: {}, status: (@build.persisted? ? :created : :unprocessable_entity)
       end
     end
   end
@@ -54,12 +54,12 @@ class BuildsController < ApplicationController
         if success
           redirect_to [current_project, @build]
         else
-          render :edit, status: 422
+          render :edit, status: :unprocessable_entity
         end
       end
 
       format.json do
-        render json: {}, status: success ? 200 : 422
+        render json: {}, status: (success ? :ok : :unprocessable_entity)
       end
     end
   end
@@ -106,6 +106,13 @@ class BuildsController < ApplicationController
   end
 
   def git_sha
-    current_project.repository.commit_from_ref(new_build_params[:git_ref], length: nil)
+    @git_sha ||= begin
+      # Create/update local cache to avoid getting a stale reference
+      current_project.with_lock(holder: 'BuildsController#create') do
+        current_project.repository.update_local_cache!
+      end
+
+      current_project.repository.commit_from_ref(new_build_params[:git_ref], length: nil)
+    end
   end
 end

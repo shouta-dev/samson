@@ -1,12 +1,14 @@
 require_relative '../test_helper'
 
+SingleCov.covered! uncovered: 1
+
 describe TerminalOutputScanner do
   let(:source) { [] }
   let(:scanner) { TerminalOutputScanner.new(source) }
 
   def tokens
     tokens = []
-    scanner.each {|token| tokens << token }
+    scanner.each { |token| tokens << token }
     tokens
   end
 
@@ -40,6 +42,11 @@ describe TerminalOutputScanner do
     output("foo")
     output("bar\n")
     tokens.must_equal [[:append, "foobar\n"]]
+  end
+
+  it "behaves well with carriage return + newlines" do
+    output("foo\r\n")
+    tokens.must_equal [[:append, "foo\n"]]
   end
 
   it 'can handle an invalid UTF-8 character' do

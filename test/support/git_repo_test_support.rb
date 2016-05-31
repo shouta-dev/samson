@@ -4,7 +4,9 @@ module GitRepoTestHelper
   end
 
   def execute_on_remote_repo(cmds)
-    `exec 2> /dev/null; cd #{repo_temp_dir}; #{cmds}`
+    result = `exec 2>&1; set -e; cd #{repo_temp_dir}; #{cmds}`
+    raise "FAIL: #{result}" unless $?.success?
+    result
   end
 
   def create_repo_without_tags
@@ -12,6 +14,7 @@ module GitRepoTestHelper
       git init
       git config user.email "test@example.com"
       git config user.name "Test User"
+      git config commit.gpgsign false
       echo monkey > foo
       git add foo
       git commit -m "initial commit"
@@ -53,8 +56,8 @@ module GitRepoTestHelper
     `git rev-parse HEAD`.strip
   end
 
-  def number_of_commits
-    `git rev-list HEAD --count`.strip.to_i
+  def number_of_commits(ref = 'HEAD')
+    `git rev-list #{ref} --count`.strip.to_i
   end
 
   def update_workspace

@@ -1,5 +1,5 @@
 class Integrations::BaseController < ApplicationController
-  skip_before_action :login_users
+  skip_around_action :login_user
   skip_before_action :verify_authenticity_token
 
   def create
@@ -79,11 +79,12 @@ class Integrations::BaseController < ApplicationController
       description: message,
       creator: user,
       label: release.version,
-      releases: [release])
+      releases: [release]
+    )
   end
 
   def create_docker_image
-    DockerBuilderService.new(@build).run!(push: true)
+    DockerBuilderService.new(@build).run!(push: true, tag_as_latest: true)
   end
 
   def latest_release

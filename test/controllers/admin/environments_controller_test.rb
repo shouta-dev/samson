@@ -1,5 +1,7 @@
 require_relative '../../test_helper'
 
+SingleCov.covered!
+
 describe Admin::EnvironmentsController do
   def self.it_renders_index
     it 'get :index succeeds' do
@@ -48,16 +50,15 @@ describe Admin::EnvironmentsController do
     describe '#create' do
       it 'creates an environment' do
         assert_difference 'Environment.count', +1 do
-          post :create, environment: {name: 'gamma', is_production: true}
+          post :create, environment: {name: 'gamma', production: true}
           assert_redirected_to admin_environments_path
         end
       end
 
-      it 'should not create an environment with blank name' do
+      it 'does not create an environment with blank name' do
         env_count = Environment.count
-        post :create, environment: {name: nil, is_production: true}
+        post :create, environment: {name: nil, production: true}
         assert_template :edit
-        flash[:error].must_equal ["Permalink can't be blank", "Name can't be blank"]
         Environment.count.must_equal env_count
       end
     end
@@ -78,20 +79,19 @@ describe Admin::EnvironmentsController do
     end
 
     describe '#update' do
-      let(:environment){ environments(:production) }
+      let(:environment) { environments(:production) }
 
       before { request.env["HTTP_REFERER"] = admin_environments_url }
 
       it 'save' do
-        post :update, environment: {name: 'Test Update', is_production: false}, id: environment
+        post :update, environment: {name: 'Test Update', production: false}, id: environment
         assert_redirected_to admin_environments_path
         Environment.find(environment.id).name.must_equal 'Test Update'
       end
 
       it 'fail to edit with blank name' do
-        post :update, environment: {name: '', is_production: false}, id: environment
+        post :update, environment: {name: '', production: false}, id: environment
         assert_template :edit
-        flash[:error].must_equal ["Name can't be blank"]
         Environment.find(environment.id).name.must_equal 'Production'
       end
     end

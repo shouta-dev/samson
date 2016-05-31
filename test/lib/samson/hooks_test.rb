@@ -1,5 +1,7 @@
 require_relative '../../test_helper'
 
+SingleCov.covered! uncovered: 13 unless defined?(Rake) # rake preloads all plugins
+
 describe Samson::Hooks do
   let(:number_of_plugins) { Dir['plugins/*'].size }
   let(:plugins) { 'nope' }
@@ -38,23 +40,23 @@ describe Samson::Hooks do
         end
       end
 
-       context 'when the plugins env is set to all' do
-        let(:plugins) { 'all,-slack,-zendesk' }
+      context 'when the plugins env is set to all' do
+        let(:plugins) { 'all,-kubernetes,-zendesk' }
 
         it 'returns the plugins that were not disabled' do
-          Samson::Hooks.plugins.size.must_equal (number_of_plugins - 2)
-          refute Samson::Hooks.active_plugin?('slack')
+          Samson::Hooks.plugins.size.must_equal(number_of_plugins - 2)
+          refute Samson::Hooks.active_plugin?('kubernetes')
           refute Samson::Hooks.active_plugin?('zendesk')
           assert Samson::Hooks.active_plugin?('env')
         end
       end
 
       context 'when the plugins env is set to include some plugins' do
-        let(:plugins) { 'slack, zendesk' }
+        let(:plugins) { 'kubernetes, zendesk' }
 
         it 'only returns those plugins' do
           Samson::Hooks.plugins.size.must_equal 2
-          assert Samson::Hooks.active_plugin?('slack')
+          assert Samson::Hooks.active_plugin?('kubernetes')
           assert Samson::Hooks.active_plugin?('zendesk')
           refute Samson::Hooks.active_plugin?('env')
         end
@@ -64,7 +66,7 @@ describe Samson::Hooks do
     context 'when load via local plugin' do
       let(:env) { 'other' }
       let(:plugins) { 'all' }
-      let (:path) { '/path/to/samson/plugins/zendesk/lib/samson_zendesk/samson_plugin.rb' }
+      let(:path) { '/path/to/samson/plugins/zendesk/lib/samson_zendesk/samson_plugin.rb' }
 
       it 'return correct plugin name from folder' do
         Samson::Hooks::Plugin.new(path).name.must_equal 'zendesk'
@@ -74,7 +76,7 @@ describe Samson::Hooks do
     context 'when load via gem plugin' do
       let(:env) { 'other' }
       let(:plugins) { 'all' }
-      let (:path) { '/path/to/gems/ruby-2.2.2/gems/samson_hipchat-0.0.0/lib/samson_hipchat/samson_plugin.rb' }
+      let(:path) { '/path/to/gems/ruby-2.2.2/gems/samson_hipchat-0.0.0/lib/samson_hipchat/samson_plugin.rb' }
 
       it 'return correct plugin name from Gem' do
         Samson::Hooks::Plugin.new(path).name.must_equal 'hipchat'
@@ -82,4 +84,3 @@ describe Samson::Hooks do
     end
   end
 end
-

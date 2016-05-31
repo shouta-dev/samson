@@ -1,5 +1,7 @@
 require_relative '../../test_helper'
 
+SingleCov.covered! uncovered: 1
+
 describe Permalinkable do
   let(:project) { projects(:test) }
   let(:project_url) { "git://foo.com:hello/world.git" }
@@ -128,7 +130,8 @@ describe Permalinkable do
         it "is invalid when not unique in scope on deleted" do
           record.update_column(:deleted_at, Time.now)
           refute_valid duplicate
-          assert_equal ["Permalink has already been taken"], duplicate.errors.full_messages # FYI: atm name validation does not include deleted
+          # FYI: atm name validation does not include deleted
+          assert_equal ["Permalink has already been taken"], duplicate.errors.full_messages
         end
       end
     end

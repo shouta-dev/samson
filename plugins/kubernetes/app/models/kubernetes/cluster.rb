@@ -1,4 +1,5 @@
 require 'kubeclient'
+require 'celluloid/io'
 
 module Kubernetes
   class Cluster < ActiveRecord::Base
@@ -11,20 +12,31 @@ module Kubernetes
     validates :config_context, presence: true
     validate :test_client_connection
 
+    def watch!
+      Watchers::ClusterPodWatcher.restart_watcher(self)
+      Watchers::ClusterPodErrorWatcher.restart_watcher(self)
+    end
+
     def client
-      @client ||= kubeconfig.client_for(config_context)
+      @client ||= Kubeclient::Client.new(
+        context.api_endpoint,
+        context.api_version,
+        ssl_options: context.ssl_options,
+        socket_options: client_socket_options
+      )
     end
 
     def extension_client
-      @extension_client ||= kubeconfig.extension_client_for(config_context)
+      @extension_client ||= Kubeclient::Client.new(
+        context.api_endpoint.gsub(/\/api$/, '') + '/apis',
+        'extensions/v1beta1',
+        ssl_options: context.ssl_options,
+        socket_options: client_socket_options
+      )
     end
 
     def context
-      @context ||= kubeconfig.contexts[config_context]
-    end
-
-    def username
-      context.user.try(:username)
+      @context ||= kubeconfig.context(config_context)
     end
 
     def namespaces
@@ -43,17 +55,25 @@ module Kubernetes
       false
     end
 
-    private
-
     def kubeconfig
-      @config_file ||= Kubernetes::ClientConfigFile.new(config_filepath)
+      @kubeconfig ||= Kubeclient::Config.read(config_filepath)
     end
 
+    private
+
     def test_client_connection
-      if File.exists?(config_filepath)
+      if File.exist?(config_filepath)
         errors.add(:config_context, "Could not connect to API Server") unless connection_valid?
       else
         errors.add(:config_filepath, "File does not exist")
+      end
+    end
+
+    def client_socket_options
+      if context.ssl_options[:verify_ssl] == OpenSSL::SSL::VERIFY_PEER
+        { ssl_socket_class: Celluloid::IO::SSLSocket }
+      else
+        { socket_class: Celluloid::IO::TCPSocket }
       end
     end
   end

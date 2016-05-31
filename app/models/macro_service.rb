@@ -2,13 +2,14 @@ class MacroService
   attr_reader :project, :user
 
   def initialize(project, user)
-    @project, @user = project, user
+    @project = project
+    @user = user
   end
 
   def execute!(macro)
     @project.jobs.create(
       user: @user,
-      command: macro.macro_command,
+      command: macro.script,
       commit: macro.reference
     )
   end

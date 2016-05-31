@@ -1,5 +1,7 @@
 require_relative '../../../test_helper'
 
+SingleCov.covered! uncovered: 2
+
 describe Samson::Tasks::LockCleaner do
   subject { Samson::Tasks::LockCleaner.new }
 
@@ -25,7 +27,7 @@ describe Samson::Tasks::LockCleaner do
   end
 
   describe "#update" do
-    let(:exp) { Exception.new("test").tap {|e| e.set_backtrace([]) } }
+    let(:exp) { Exception.new("test").tap { |e| e.set_backtrace([]) } }
 
     it "does nothing without an exception" do
       Rails.logger.expects(:error).never
@@ -35,7 +37,7 @@ describe Samson::Tasks::LockCleaner do
 
     it "logs when given an exception" do
       Rails.logger.expects(:error).twice
-      Airbrake.expects(:notify).with(exp, { error_message: 'Samson::Tasks::LockCleaner failed' }).once
+      Airbrake.expects(:notify).with(exp, error_message: 'Samson::Tasks::LockCleaner failed').once
       subject.update(Time.now, nil, exp)
     end
   end

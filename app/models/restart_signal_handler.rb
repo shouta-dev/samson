@@ -2,7 +2,7 @@
 # Self-pipe is also best practice, since signal handlers can themselves be interrupted
 class RestartSignalHandler
   class << self
-    alias listen new
+    alias_method :listen, :new
   end
 
   def initialize
@@ -33,6 +33,6 @@ class RestartSignalHandler
     puts "Passing SIGUSR2 on."
 
     # Pass USR2 to the underlying server
-    Process.kill('SIGUSR2', $$)
+    Process.kill('SIGUSR2', Process.pid)
   end
 end

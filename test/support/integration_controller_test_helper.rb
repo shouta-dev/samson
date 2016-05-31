@@ -16,7 +16,7 @@ module IntegrationsControllerTestHelper
         project.deploys.must_equal []
       end
 
-      if failed = options[:failed]
+      if (failed = options[:failed])
         it "doesn't trigger a deploy if the build did not pass" do
           post :create, payload.deep_merge(token: project.token).deep_merge(failed)
 
@@ -53,6 +53,21 @@ module IntegrationsControllerTestHelper
         assert_raises ActiveRecord::RecordNotFound do
           post :create, payload.deep_merge(token: "foobar")
         end
+      end
+    end
+  end
+
+  def does_not_deploy(name, &block)
+    describe name do
+      before(&block) if block
+
+      it "does not deploy" do
+        hmac = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new('sha1'), 'test', payload.to_param)
+        request.headers['X-Hub-Signature'] = "sha1=#{hmac}"
+        post :create, payload.deep_merge(token: project.token)
+
+        project.deploys.must_equal []
+        response.status.must_equal 200
       end
     end
   end

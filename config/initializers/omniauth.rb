@@ -2,13 +2,9 @@ require 'omniauth'
 
 OmniAuth.config.logger = Rails.logger
 
-require 'omniauth-github'
-require 'omniauth-google-oauth2'
-require 'omniauth-ldap'
-require 'omniauth-gitlab'
-
 Rails.application.config.middleware.use OmniAuth::Builder do
   if Rails.application.config.samson.auth.github
+    require 'omniauth-github'
     provider :github,
       ENV["GITHUB_CLIENT_ID"],
       ENV["GITHUB_SECRET"],
@@ -16,31 +12,37 @@ Rails.application.config.middleware.use OmniAuth::Builder do
       client_options: {
         site:          "https://#{Rails.application.config.samson.github.api_url}",
         authorize_url: "https://#{Rails.application.config.samson.github.web_url}/login/oauth/authorize",
-        token_url:     "https://#{Rails.application.config.samson.github.web_url}/login/oauth/access_token",
+        token_url:     "https://#{Rails.application.config.samson.github.web_url}/login/oauth/access_token"
       }
   end
 
   if Rails.application.config.samson.auth.google
-    provider OmniAuth::Strategies::GoogleOauth2,
+    require 'omniauth-google-oauth2'
+    provider(
+      OmniAuth::Strategies::GoogleOauth2,
       ENV["GOOGLE_CLIENT_ID"],
       ENV["GOOGLE_CLIENT_SECRET"],
-      {
-        name:   "google",
-        scope:  "email,profile",
-        prompt: "select_account",
+      name:   "google",
+      scope:  "email,profile",
+      prompt: "select_account"
+    )
+  end
+
+  if Rails.application.config.samson.auth.gitlab
+    require 'omniauth-gitlab'
+    provider :gitlab,
+      ENV["GITLAB_APPLICATION_ID"],
+      ENV["GITLAB_SECRET"],
+      client_options: {
+        site: "http://#{ENV["GITLAB_URL"]}/",
+        authorize_url: '/oauth/authorize',
+        token_url: '/oauth/token'
       }
   end
 
-  provider :gitlab,
-    ENV["GITLAB_APPLICATION_ID"],
-    ENV["GITLAB_SECRET"],
-    client_options: {
-       site: ENV["GITLAB_URL"],
-       authorize_url: '/oauth/authorize',
-       token_url: '/oauth/token'
-     }
-
   if Rails.application.config.samson.auth.ldap
+    require 'omniauth-ldap'
+
     provider OmniAuth::Strategies::LDAP,
       title: Rails.application.config.samson.ldap.title,
       host: Rails.application.config.samson.ldap.host,

@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <title><%= content_for(:page_title) || "Samson" %></title>
+    <%= favicon_link_tag '32x32_light.png', type: 'image/png'%>
     <%= stylesheet_link_tag "application", media: "all" %>
     <%= Samson::Hooks.render_stylesheets(self) %>
     <%= javascript_include_tag "application" %>
@@ -11,6 +12,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="stream-origin" content="<%= Rails.application.config.samson.stream_origin %>">
     <meta name="deploy-origin" content="<%= Rails.application.config.samson.deploy_origin %>">
+    <meta name="environment" content="<%= Rails.env %>">
   </head>
 
   <body class="<%= controller_action %>" ng-app="samson">

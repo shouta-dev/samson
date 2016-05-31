@@ -1,27 +1,28 @@
 require_relative '../../test_helper'
 
+SingleCov.covered! uncovered: 1
+
 describe Integrations::TravisController do
   let(:sha) { "123abc" }
   let(:project) { projects(:test) }
   let(:stage) { stages(:test_staging) }
 
-  setup do
+  before do
     Deploy.delete_all
-    @orig_token, ENV["TRAVIS_TOKEN"] = ENV["TRAVIS_TOKEN"], "TOKEN"
+    @orig_token = ENV["TRAVIS_TOKEN"]
+    ENV["TRAVIS_TOKEN"] = "TOKEN"
     project.webhooks.create!(stage: stages(:test_staging), branch: "master", source: 'travis')
   end
 
-  teardown do
+  after do
     ENV["TRAVIS_TOKEN"] = @orig_token
   end
 
   describe "a POST to :create" do
     let(:authorization) { nil }
 
-    setup do
-      if authorization
-        @request.headers["Authorization"] = authorization
-      end
+    before do
+      @request.headers["Authorization"] = authorization if authorization
     end
 
     it "fails with unknown project" do
@@ -31,7 +32,7 @@ describe Integrations::TravisController do
     end
 
     describe "with no authorization" do
-      setup { post :create, token: project.token }
+      before { post :create, token: project.token }
 
       it "renders ok" do
         response.status.must_equal(200)
@@ -40,7 +41,7 @@ describe Integrations::TravisController do
 
     describe "with invalid authorization" do
       let(:authorization) { "BLAHBLAH" }
-      setup { post :create, token: project.token }
+      before { post :create, token: project.token }
 
       it "renders ok" do
         response.status.must_equal(200)
@@ -52,17 +53,18 @@ describe Integrations::TravisController do
         Digest::SHA2.hexdigest("bar/foo#{ENV["TRAVIS_TOKEN"]}")
       end
 
-      setup do
-        post :create, token: project.token,
-          payload: JSON.dump(payload)
+      before do
+        post :create, token: project.token, payload: JSON.dump(payload)
       end
 
       describe "failure" do
-        let(:payload) {{
-          status_message: 'Failure',
-          branch: 'sdavidovitz/blah',
-          message: 'A change'
-        }}
+        let(:payload) do
+          {
+            status_message: 'Failure',
+            branch: 'sdavidovitz/blah',
+            message: 'A change'
+          }
+        end
 
         it "renders ok" do
           response.status.must_equal(200)
@@ -74,14 +76,16 @@ describe Integrations::TravisController do
         let(:status_message) { 'Passed' }
         let(:commit_message) { 'A change' }
 
-        let(:payload) {{
-          status_message: status_message,
-          branch: 'master',
-          message: commit_message,
-          committer_email: user.email,
-          commit: sha,
-          type: 'push'
-        }}
+        let(:payload) do
+          {
+            status_message: status_message,
+            branch: 'master',
+            message: commit_message,
+            committer_email: user.email,
+            commit: sha,
+            type: 'push'
+          }
+        end
 
         describe "with status_message 'Passed'" do
           it "creates a deploy" do
@@ -106,6 +110,7 @@ describe Integrations::TravisController do
             project.deploys.must_equal([])
           end
         end
+
         describe "with [skip deploy] in the message" do
           let(:commit_message) { 'A change but this time [skip deploy] is included' }
 

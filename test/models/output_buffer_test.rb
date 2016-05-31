@@ -1,5 +1,7 @@
 require_relative '../test_helper'
 
+SingleCov.covered! uncovered: 3
+
 describe OutputBuffer do
   include OutputBufferSupport
 
@@ -43,7 +45,7 @@ describe OutputBuffer do
   def build_listener
     Thread.new do
       content = []
-      buffer.each {|_event, chunk| content << chunk }
+      buffer.each { |_event, chunk| content << chunk }
       content
     end
   end

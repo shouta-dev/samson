@@ -1,5 +1,7 @@
 require_relative '../test_helper'
 
+SingleCov.covered!
+
 describe 'Unauthorized' do
   include Rack::Test::Methods
 
@@ -9,7 +11,7 @@ describe 'Unauthorized' do
 
   describe '#respond' do
     describe 'as html' do
-      let(:headers) {{}}
+      let(:headers) { {} }
 
       before do
         get '/', {}, headers
@@ -30,7 +32,7 @@ describe 'Unauthorized' do
       end
 
       describe 'with a referer' do
-        let(:headers) {{ 'HTTP_REFERER' => 'hello' }}
+        let(:headers) { { 'HTTP_REFERER' => 'hello' } }
 
         it 'redirects to the referer' do
           last_response.must_be(:redirect?)

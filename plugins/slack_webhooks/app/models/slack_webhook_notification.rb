@@ -16,12 +16,12 @@ class SlackWebhookNotification
 
   def content
     subject = "[#{@project.name}] #{@deploy.summary}"
-    @content ||= SlackNotificationRenderer.render(@deploy, subject)
+    @content ||= SlackWebhookNotificationRenderer.render(@deploy, subject)
   end
 
   def _deliver(webhook)
     payload = { text: content, username: 'samson-bot' }
-    payload.merge!(channel: webhook.channel) unless webhook.channel.blank?
+    payload[:channel] = webhook.channel unless webhook.channel.blank?
 
     Faraday.post(webhook.webhook_url, payload: payload.to_json)
   rescue Faraday::ClientError => e

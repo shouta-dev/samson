@@ -1,5 +1,7 @@
 require_relative "../../test_helper"
 
+SingleCov.covered! uncovered: 3
+
 describe Kubernetes::Util do
   describe '.parse_file' do
     let(:input_hash) do
@@ -22,22 +24,21 @@ describe Kubernetes::Util do
     end
 
     it 'handles a YAML file with multiple entries' do
-      yaml_input = <<-EO_YAML
----
-name: foo
-value: 999
----
-name: other_key
-value: 1000
-password: 12345
-      EO_YAML
+      yaml_input = <<-YAML.strip_heredoc
+        ---
+        name: foo
+        value: 999
+        ---
+        name: other_key
+        value: 1000
+        password: 12345
+      YAML
 
       output = Kubernetes::Util.parse_file(yaml_input, 'file.yaml')
       output.must_be_kind_of Array
       output.count.must_equal 2
-      output[0].must_equal({ 'name' => 'foo', 'value' => 999 })
-      output[1].must_equal({ 'name' => 'other_key', 'value' => 1000, 'password' => 12345 })
+      output[0].must_equal('name' => 'foo', 'value' => 999)
+      output[1].must_equal('name' => 'other_key', 'value' => 1000, 'password' => 12345)
     end
   end
 end
-

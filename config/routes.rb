@@ -1,4 +1,6 @@
 Samson::Application.routes.draw do
+  root to: 'projects#index'
+
   resources :projects do
     resources :jobs, only: [:index, :new, :create, :show, :destroy]
 
@@ -15,7 +17,6 @@ Samson::Application.routes.draw do
     resources :deploys, only: [:index, :show, :destroy] do
       collection do
         get :active
-        get :active_count
       end
 
       member do
@@ -32,7 +33,6 @@ Samson::Application.routes.draw do
       end
 
       member do
-        get :new_relic, to: 'new_relic#show'
         get :clone, to: 'stages#clone'
       end
 
@@ -50,7 +50,7 @@ Samson::Application.routes.draw do
 
     resources :users, only: [:index, :update]
 
-    resources :project_roles, only: [:create, :update]
+    resources :project_roles, only: [:create]
 
     member do
       get :deploy_group_versions
@@ -65,12 +65,15 @@ Samson::Application.routes.draw do
       get :active
       get :active_count
       get :recent
+      get :search
     end
   end
 
   resources :deploy_groups, only: [:show]
 
   resource :profile, only: [:show, :update]
+
+  resources :versions, only: [:index]
 
   get '/auth/github/callback', to: 'sessions#github'
   get '/auth/google/callback', to: 'sessions#google'
@@ -83,6 +86,7 @@ Samson::Application.routes.draw do
   get '/login', to: 'sessions#new'
   get '/logout', to: 'sessions#destroy'
 
+  resources :csv_exports, only: [:index, :new, :create, :show]
   resources :stars, only: [:create, :destroy]
   resources :dashboards, only: [:show] do
     member do
@@ -94,6 +98,7 @@ Samson::Application.routes.draw do
     resources :users, only: [:index, :show, :update, :destroy]
     resource :projects, only: [:show]
     resources :commands, except: [:show]
+    resources :secrets, except: [:show]
     resources :environments, except: [:show]
     resources :deploy_groups do
       member do
@@ -116,9 +121,5 @@ Samson::Application.routes.draw do
 
   resources :access_requests, only: [:new, :create]
 
-  get '/project_roles', to: 'project_roles#index'
-
   mount SseRailsEngine::Engine, at: '/streaming'
-
-  root to: 'projects#index'
 end

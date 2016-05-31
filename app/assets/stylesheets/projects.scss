@@ -46,6 +46,13 @@
       color: #666;
       font-size: 25px;
     }
+    .gitlab {
+      position: absolute;
+      right: 20px;
+      top: 18px;
+      color: #666;
+      font-size: 25px;
+    }
   }
 
   ul {
@@ -58,6 +65,13 @@
     padding-bottom: 6px;
     color: #333;
     font-size: 15px;
+  }
+
+  .label {
+    max-width: 150px;
+    overflow: hidden;
+    display: inline-block;
+    text-overflow: ellipsis;
   }
 
   .stage-link {
@@ -127,6 +141,12 @@ pre.pre-inline {
     right: 0;
     top: 0;
   }
+  .gitlab {
+    color: #333;
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
 }
 
 .star a {
@@ -159,19 +179,7 @@ pre.pre-inline {
 
 .editable-role {
   width: 300px;
-}
-
-.editable-role .editable-controls {
-  display: table;
-  width: auto;
-}
-
-.editable-role .editable-input {
-  display: table-cell;
-  vertical-align: middle;
-}
-
-.editable-role .editable-input label {
-  padding: 0;
-  margin: 0 15px 0 0;
+  label {
+    margin-right: 10px;
+  }
 }

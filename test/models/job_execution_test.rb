@@ -1,5 +1,7 @@
 require_relative '../test_helper'
 
+SingleCov.covered! uncovered: 6
+
 describe JobExecution do
   include GitRepoTestHelper
 
@@ -117,7 +119,7 @@ describe JobExecution do
   it "tests additional exports hook" do
     job.update(command: 'env | sort')
 
-    Samson::Hooks.callback :job_additional_vars do |job|
+    Samson::Hooks.callback :job_additional_vars do |_job|
       { ADDITIONAL_EXPORT: "yes" }
     end
 
@@ -130,7 +132,7 @@ describe JobExecution do
     job.update(command: 'env | sort')
     execute_job('master', FOO: 'bar')
     lines = job.output.split "\n"
-    lines.must_include "DEPLOY_URL=#{deploy.full_url}"
+    lines.must_include "DEPLOY_URL=#{deploy.url}"
     lines.must_include "DEPLOYER=jdoe@test.com"
     lines.must_include "DEPLOYER_EMAIL=jdoe@test.com"
     lines.must_include "DEPLOYER_NAME=John Doe"
@@ -222,6 +224,23 @@ describe JobExecution do
     end
   end
 
+  it 'can access secrets' do
+    id = "global/#{project.permalink}/global/bar"
+    create_secret id
+    job.update(command: "echo 'secret://#{id}'")
+    execute_job("master")
+    assert_equal 'MY-SECRET', last_line_of_output
+  end
+
+  describe "kubernetes" do
+    before { stage.update_column :kubernetes, true }
+
+    it "does the execution with the kubernetes executor" do
+      Kubernetes::DeployExecutor.any_instance.expects(:execute!).returns true
+      execute_job("master")
+    end
+  end
+
   describe 'when JobExecution is disabled' do
     before do
       JobExecution.enabled = false
@@ -267,7 +286,8 @@ describe JobExecution do
 
     it "stops the execution with kill if job has already been interrupted" do
       begin
-        old, JobExecution.stop_timeout = JobExecution.stop_timeout, 0
+        old = JobExecution.stop_timeout
+        JobExecution.stop_timeout = 0
         execution.start!
         TerminalExecutor.any_instance.expects(:stop!).with('INT')
         TerminalExecutor.any_instance.expects(:stop!).with('KILL')

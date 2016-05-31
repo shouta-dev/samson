@@ -1,19 +1,20 @@
 class DeploysController < ApplicationController
-  include ProjectLevelAuthorization
+  include CurrentProject
 
-  skip_before_action :require_project, only: [:active, :active_count, :recent, :changeset]
+  skip_before_action :require_project, only: [:active, :active_count, :changeset]
 
   before_action :authorize_project_deployer!, only: [:new, :create, :confirm, :buddy_check, :destroy]
-  before_action :find_deploy, except: [:index, :recent, :active, :active_count, :new, :create, :confirm]
+  before_action :find_deploy, except: [:index, :active, :active_count, :new, :create, :confirm, :search]
   before_action :stage, only: :new
 
   def index
     scope = current_project.try(:deploys) || Deploy
-    @deploys = if params[:ids]
-      Kaminari.paginate_array(scope.find(params[:ids])).page(1).per(1000)
-    else
-      scope.page(params[:page])
-    end
+    @deploys =
+      if params[:ids]
+        Kaminari.paginate_array(scope.find(params[:ids])).page(1).per(1000)
+      else
+        scope.page(params[:page])
+      end
 
     respond_to do |format|
       format.html
@@ -21,25 +22,70 @@ class DeploysController < ApplicationController
     end
   end
 
-  def active_count
-    render json: { deploy_count: active_deploy_scope.count }
-  end
-
   def active
     @deploys = active_deploy_scope
-
-    respond_to do |format|
-      format.html { render 'recent', locals: { title: 'Current Deploys', show_filters: false, controller: 'currentDeploysCtrl' } }
-      format.json { render json: @deploys }
-    end
+    render partial: 'shared/deploys_table', layout: false if params[:partial]
   end
 
-  def recent
-    respond_to do |format|
-      format.html { render 'recent', locals: { title: 'Recent Deploys', show_filters: true, controller: 'TimelineCtrl' } }
-      format.json do
-        render json: Deploy.page(params[:page]).per(30)
+  def active_count
+    render json: Deploy.active.count
+  end
+
+  # Takes the same params that are used by the client side filtering
+  # on the recent deploys pages.
+  # Returns a paginated json object of deploys that people are
+  # interested in rather than doing client side filtering.
+  # params:
+  #   * deployer (name of the user that started the job(s), this is a fuzzy match
+  #   * project_name (name of the project)
+  #   * production (boolean, is this in proudction or not)
+  #   * status (what is the status of this job failed|running| etc)
+
+  def search
+    status = params[:status].presence
+
+    if status && !Job.valid_status?(params[:status])
+      render json: { errors: "invalid status given" }, status: 400
+      return
+    end
+
+    if params[:deployer].present?
+      users = User.where(
+        "name LIKE ?", "%#{ActiveRecord::Base.send(:sanitize_sql_like, params[:deployer])}%"
+      ).pluck(:id)
+    end
+
+    if params[:project_name].present?
+      projects = Project.where(
+        "name LIKE ?", "%#{ActiveRecord::Base.send(:sanitize_sql_like, params[:project_name])}%"
+      ).pluck(:id)
+    end
+
+    if users || status
+      jobs = Job
+      jobs = jobs.where(user: users) if users
+      jobs = jobs.where(status: status) if status
+    end
+
+    if params[:production].present? || projects
+      stages = Stage
+      stages = stages.where(project: projects) if projects
+      if params[:production].present?
+        production = ActiveRecord::Type::Boolean.new.type_cast_from_user(params[:production])
+        stages = stages.select { |stage| (stage.production? == production) }
       end
+    end
+
+    deploys = Deploy
+    deploys = deploys.where(stage: stages) if stages
+    deploys = deploys.where(job: jobs) if jobs
+    @deploys = deploys.page(params[:page]).per(30)
+
+    respond_to do |format|
+      format.json do
+        render json: @deploys
+      end
+      format.html
     end
   end
 
@@ -61,7 +107,8 @@ class DeploysController < ApplicationController
       end
 
       format.json do
-        render json: @deploy.to_json, status: @deploy.persisted? ? :created : 422, location: [current_project, @deploy]
+        status = (@deploy.persisted? ? :created : :unprocessable_entity)
+        render json: @deploy.to_json, status: status, location: [current_project, @deploy]
       end
     end
   end
@@ -72,9 +119,7 @@ class DeploysController < ApplicationController
   end
 
   def buddy_check
-    if @deploy.pending?
-      @deploy.confirm_buddy!(current_user)
-    end
+    @deploy.confirm_buddy!(current_user) if @deploy.pending?
 
     redirect_to [current_project, @deploy]
   end
@@ -92,7 +137,7 @@ class DeploysController < ApplicationController
   end
 
   def changeset
-    if stale?(etag: @deploy.cache_key, last_modified: @deploy.updated_at)
+    if stale? @deploy
       @changeset = @deploy.changeset
       render 'changeset', layout: false
     end
@@ -111,7 +156,7 @@ class DeploysController < ApplicationController
   protected
 
   def deploy_permitted_params
-    [ :reference, :stage_id ] + Samson::Hooks.fire(:deploy_permitted_params)
+    [:reference, :stage_id] + Samson::Hooks.fire(:deploy_permitted_params)
   end
 
   def reference

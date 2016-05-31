@@ -1,6 +1,8 @@
 ENV["RAILS_ENV"] ||= "test"
 
-ENV['PROJECT_CREATED_NOTIFY_ADDRESS'] = 'blah@example.com'
+require 'single_cov'
+SingleCov::APP_FOLDERS << 'decorators'
+SingleCov.setup :minitest
 
 if ENV['CODECLIMATE_REPO_TOKEN']
   require 'codeclimate-test-reporter'
@@ -10,12 +12,18 @@ elsif ENV['COVERAGE']
   SimpleCov.start 'rails'
 end
 
+# rake adds these, but we don't need them / want to be in a consistent environment
+$LOAD_PATH.delete 'lib'
+$LOAD_PATH.delete 'test'
+
 require_relative '../config/environment'
 require 'rails/test_help'
 require 'minitest/rails'
 require 'maxitest/autorun'
 require 'webmock/minitest'
 require 'mocha/setup'
+
+require 'sucker_punch/testing/inline'
 
 # Use ActiveSupport::TestCase for everything that was not matched before
 MiniTest::Spec::DSL::TYPES[-1] = [//, ActiveSupport::TestCase]
@@ -99,10 +107,11 @@ class ActiveSupport::TestCase
   end
 
   def ar_queries
+    require 'query_diet'
     QueryDiet::Logger.queries.map(&:first) - ["select 1"]
   end
 
-  def assert_sql_queries(count, &block)
+  def assert_sql_queries(count)
     old = ar_queries
     yield
     new = ar_queries
@@ -118,17 +127,43 @@ class ActiveSupport::TestCase
   # record hook and their arguments called during a given block
   def record_hooks(callback, &block)
     called = []
-    Samson::Hooks.with_callback(callback, lambda{ |*args| called << args }, &block)
+    Samson::Hooks.with_callback(callback, lambda { |*args| called << args }, &block)
     called
   end
 
   def silence_stderr
-    old, $VERBOSE = $VERBOSE, nil
+    old = $VERBOSE
+    $VERBOSE = nil
     yield
   ensure
     $VERBOSE = old
   end
 
+  undef :assert_nothing_raised
+  class << self
+    undef :test
+  end
+
+  def create_secret(key)
+    SecretStorage::DbBackend::Secret.create!(
+      id: key,
+      value: 'MY-SECRET',
+      updater_id: users(:admin).id,
+      creator_id: users(:admin).id
+    )
+  end
+
+  def with_env(env)
+    old = env.map do |k, v|
+      k = k.to_s
+      o = ENV[k]
+      ENV[k] = v
+      [k, o]
+    end
+    yield
+  ensure
+    old.each { |k, v| ENV[k] = v }
+  end
 end
 
 Mocha::Expectation.class_eval do
@@ -145,31 +180,23 @@ class ActionController::TestCase
     def unauthorized(method, action, params = {})
       it "is unauthorized when doing a #{method} to #{action} with #{params}" do
         send(method, action, params)
-        @unauthorized.must_equal true, "Request was not marked unauthorized"
+        assert_unauthorized
       end
     end
 
-    %w{super_admin admin deployer viewer}.each do |user|
+    %w[super_admin admin deployer viewer project_admin project_deployer].each do |user|
       define_method "as_a_#{user}" do |&block|
         describe "as a #{user}" do
-          setup { request.env['warden'].set_user(users(user)) }
-          instance_eval(&block)
-        end
-      end
-    end
-
-    %w{project_admin project_deployer}.each do |user|
-      define_method "as_a_#{user}" do |&block|
-        describe "as a #{user}" do
-          setup { request.env['warden'].set_user(users(user)) }
+          let(:user) { users(user) }
+          before { request.env['warden'].set_user(self.user) }
           instance_eval(&block)
         end
       end
     end
   end
 
-  setup do
-    middleware = Rails.application.config.middleware.detect {|m| m.name == 'Warden::Manager'}
+  before do
+    middleware = Rails.application.config.middleware.detect { |m| m.name == 'Warden::Manager' }
     manager = Warden::Manager.new(nil, &middleware.block)
     request.env['warden'] = Warden::Proxy.new(request.env, manager)
 
@@ -177,7 +204,7 @@ class ActionController::TestCase
     create_default_stubs
   end
 
-  teardown do
+  after do
     Warden.test_reset!
   end
 
@@ -189,6 +216,14 @@ class ActionController::TestCase
     request.env['warden']
   end
 
+  def assert_unauthorized
+    @unauthorized.must_equal true, "Request was not marked unauthorized"
+  end
+
+  def refute_unauthorized
+    refute @unauthorized, "Request was marked unauthorized"
+  end
+
   def process_with_catch_warden(*args)
     catch(:warden) do
       return process_without_catch_warden(*args)
@@ -198,6 +233,18 @@ class ActionController::TestCase
   end
 
   alias_method_chain :process, :catch_warden
+
+  def self.use_test_routes
+    before do
+      Rails.application.routes.draw do
+        match "/test/:test_route/:controller/:action", via: [:get, :post, :put, :patch, :delete]
+      end
+    end
+
+    after do
+      Rails.application.reload_routes!
+    end
+  end
 end
 
 WebMock.disable_net_connect!(allow: 'codeclimate.com')

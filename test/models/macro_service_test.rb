@@ -1,5 +1,7 @@
 require_relative '../test_helper'
 
+SingleCov.covered!
+
 describe MacroService do
   let(:macro) { macros(:test) }
   let(:user) { users(:deployer) }
@@ -9,7 +11,7 @@ describe MacroService do
   it 'creates a new job' do
     job = service.execute!(macro)
     job.persisted?.must_equal(true)
-    job.command.must_equal("echo hello\nseq 1 5")
+    job.command.must_equal("echo hello")
     job.user.must_equal(user)
     job.project.must_equal(project)
   end

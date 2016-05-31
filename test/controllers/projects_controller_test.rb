@@ -1,9 +1,11 @@
 require_relative '../test_helper'
 
+SingleCov.covered!
+
 describe ProjectsController do
   let(:project) { projects(:test) }
 
-  setup do
+  before do
     Project.any_instance.stubs(:clone_repository).returns(true)
     Project.any_instance.stubs(:valid_repository_url).returns(true)
   end
@@ -101,7 +103,7 @@ describe ProjectsController do
     end
 
     as_a_admin do
-      setup do
+      before do
         post :create, params
       end
 
@@ -146,10 +148,6 @@ describe ProjectsController do
       describe "with invalid parameters" do
         let(:params) { { project: { name: "" } } }
 
-        it "sets the flash error" do
-          request.flash[:error].wont_be_nil
-        end
-
         it "renders new template" do
           assert_template :new
         end
@@ -163,7 +161,7 @@ describe ProjectsController do
 
   describe "a DELETE to #destroy" do
     as_a_viewer do
-        unauthorized :delete, :destroy, id: :foo
+      unauthorized :delete, :destroy, id: :foo
     end
 
     as_a_deployer do
@@ -171,7 +169,7 @@ describe ProjectsController do
     end
 
     as_a_admin do
-      setup do
+      before do
         delete :destroy, id: project.to_param
       end
 
@@ -212,7 +210,7 @@ describe ProjectsController do
       end
 
       describe "common" do
-        setup do
+        before do
           put :update, params.merge(id: project.to_param)
         end
 
@@ -230,10 +228,6 @@ describe ProjectsController do
 
         describe "with invalid parameters" do
           let(:params) { { project: { name: "" } } }
-
-          it "sets the flash error" do
-            request.flash[:error].wont_be_nil
-          end
 
           it "renders edit template" do
             assert_template :edit
@@ -251,7 +245,7 @@ describe ProjectsController do
       end
 
       describe "common" do
-        setup do
+        before do
           put :update, params.merge(id: project.to_param)
         end
 
@@ -269,10 +263,6 @@ describe ProjectsController do
 
         describe "with invalid parameters" do
           let(:params) { { project: { name: "" } } }
-
-          it "sets the flash error" do
-            request.flash[:error].wont_be_nil
-          end
 
           it "renders edit template" do
             assert_template :edit
@@ -359,7 +349,8 @@ describe ProjectsController do
           stage: stages(:test_production),
           job: deploy.job,
           reference: "new",
-          updated_at: time - 1.day
+          updated_at: time - 1.day,
+          release: true
         )
         get :deploy_group_versions, id: project.to_param, before: time.to_s
         deploy_ids = JSON.parse(response.body).map { |_id, deploy| deploy['id'] }

@@ -1,41 +1,51 @@
 require_relative '../../test_helper'
 
+SingleCov.covered!
+
 describe Admin::DeployGroupsController do
   let(:deploy_group) { deploy_groups(:pod100) }
   let(:stage) { stages(:test_staging) }
 
-  def self.it_renders_index
-    it 'get :index succeeds' do
-      get :index
-      assert_response :success
-      assert_template :index
-      assert_select('tbody tr').count.must_equal DeployGroup.count
-    end
-  end
-
   as_a_deployer do
     unauthorized :get, :index
+    unauthorized :get, :show, id: 1
     unauthorized :post, :create
-    unauthorized :delete, :destroy, id: 1
-    unauthorized :post, :update, id: 1
     unauthorized :get, :new
+    unauthorized :get, :edit, id: 1
+    unauthorized :post, :update, id: 1
+    unauthorized :delete, :destroy, id: 1
     unauthorized :get, :deploy_all, id: 1
     unauthorized :post, :deploy_all, id: 1
   end
 
   as_a_admin do
-    it_renders_index
+    describe "#index" do
+      it "renders" do
+        get :index
+        assert_template :index
+        assert_response :success
+        assert_select('tbody tr').count.must_equal DeployGroup.count
+      end
+    end
+
+    describe "#show" do
+      it 'renders' do
+        get :show, id: deploy_group.id
+        assert_template :show
+        assert_response :success
+      end
+    end
+
     unauthorized :post, :create
-    unauthorized :delete, :destroy, id: 1
-    unauthorized :post, :update, id: 1
     unauthorized :get, :new
+    unauthorized :get, :edit, id: 1
+    unauthorized :post, :update, id: 1
+    unauthorized :delete, :destroy, id: 1
     unauthorized :get, :deploy_all, id: 1
     unauthorized :post, :deploy_all, id: 1
   end
 
   as_a_super_admin do
-    it_renders_index
-
     describe "#new" do
       it 'renders' do
         get :new
@@ -55,12 +65,36 @@ describe Admin::DeployGroupsController do
         deploy_group_count = DeployGroup.count
         post :create, deploy_group: {name: nil}
         assert_template :edit
-        flash[:error].must_equal ["Permalink can't be blank", "Name can't be blank", "Environment can't be blank"]
         DeployGroup.count.must_equal deploy_group_count
       end
     end
 
-    describe '#delete' do
+    describe '#edit' do
+      it "renders" do
+        get :edit, id: deploy_group
+        assert_template :edit
+      end
+    end
+
+    describe '#update' do
+      before { request.env["HTTP_REFERER"] = admin_deploy_groups_url }
+
+      it 'saves' do
+        post :update, deploy_group: {
+          name: 'Test Update', environment_id: environments(:production).id
+        }, id: deploy_group.id
+        assert_redirected_to admin_deploy_groups_path
+        DeployGroup.find(deploy_group.id).name.must_equal 'Test Update'
+      end
+
+      it 'fail to update with blank name' do
+        post :update, deploy_group: {name: ''}, id: deploy_group
+        assert_template :edit
+        deploy_group.reload.name.must_equal 'Pod 100'
+      end
+    end
+
+    describe '#destroy' do
       it 'succeeds' do
         delete :destroy, id: deploy_group
         assert_redirected_to admin_deploy_groups_path
@@ -74,26 +108,11 @@ describe Admin::DeployGroupsController do
       end
     end
 
-    describe '#update' do
-      before { request.env["HTTP_REFERER"] = admin_deploy_groups_url }
-
-      it 'saves' do
-        post :update, deploy_group: {name: 'Test Update', environment_id: environments(:production).id}, id: deploy_group.id
-        assert_redirected_to admin_deploy_groups_path
-        DeployGroup.find(deploy_group.id).name.must_equal 'Test Update'
-      end
-
-      it 'fail to update with blank name' do
-        post :update, deploy_group: {name: ''}, id: deploy_group
-        assert_template :edit
-        flash[:error].must_include "Name can't be blank"
-        deploy_group.reload.name.must_equal 'Pod 100'
-      end
-    end
-
     describe "#deploy_all" do
       before do
-        stage.commands.first.update_attributes!(command: "cap $DEPLOY_GROUPS deploy")
+        [stage, stages(:test_production)].each do |stage|
+          stage.commands.first.update_attributes!(command: "cap $DEPLOY_GROUPS deploy")
+        end
       end
 
       it "renders" do
@@ -126,10 +145,19 @@ describe Admin::DeployGroupsController do
         assigns[:stages].must_equal []
       end
 
-      it "ignores stages that are on different environments" do
-        stage.deploy_groups.clear
-        get :deploy_all, id: deploy_group
-        assigns[:stages].must_equal []
+      describe "without stages on current environment" do
+        before { stage.deploy_groups.clear }
+
+        it "ignores stages that are on different environments" do
+          get :deploy_all, id: deploy_group
+          assigns[:stages].must_equal []
+        end
+
+        it "shows stages that are on different environments when the environment was overwritten" do
+          get :deploy_all, id: deploy_group, environment_id: environments(:production).id
+          production_stage = stages(:test_production)
+          assigns[:stages].must_equal [[production_stage, production_stage.deploys.first]]
+        end
       end
     end
 

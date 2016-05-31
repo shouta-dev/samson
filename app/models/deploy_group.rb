@@ -9,6 +9,7 @@ class DeployGroup < ActiveRecord::Base
 
   validates_presence_of :name, :environment_id
   validates_uniqueness_of :name, :env_value
+  validates_format_of :env_value, with: /\A\w[-_:\w]*\w\z/
   before_validation :initialize_env_value, on: :create
 
   default_scope { order(:name) }
@@ -28,6 +29,10 @@ class DeployGroup < ActiveRecord::Base
     "#{name} (#{environment.name})"
   end
 
+  def natural_order
+    name.split(/(\d+)/).each_with_index.map { |x, i| i.odd? ? x.to_i : x }
+  end
+
   private
 
   def permalink_base
@@ -39,6 +44,6 @@ class DeployGroup < ActiveRecord::Base
   end
 
   def initialize_env_value
-    self.env_value = name if env_value.blank?
+    self.env_value = name.to_s.parameterize if env_value.blank?
   end
 end

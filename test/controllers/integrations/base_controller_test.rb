@@ -1,5 +1,7 @@
 require_relative '../../test_helper'
 
+SingleCov.covered! uncovered: 8
+
 describe Integrations::BaseController do
   let(:sha) { "dc395381e650f3bac18457909880829fc20e34ba" }
   let(:project) { projects(:test) }
@@ -16,7 +18,7 @@ describe Integrations::BaseController do
     Project.any_instance.stubs(:create_releases_for_branch?).returns(true)
     Build.any_instance.stubs(:validate_git_reference).returns(true)
     stub_request(:post, "https://api.github.com/repos/bar/foo/releases").
-      to_return(:status => 200, :body => "", :headers => {})
+      to_return(status: 200, body: "", headers: {})
   end
 
   describe "#create" do
@@ -36,7 +38,7 @@ describe Integrations::BaseController do
     end
 
     it 're-uses last release if commit already present' do
-      stub_github_api("repos/bar/foo/compare/#{sha}...#{sha}", { status: 'identical' })
+      stub_github_api("repos/bar/foo/compare/#{sha}...#{sha}", status: 'identical')
       base_controller.expects(:head).with(:ok).twice
       base_controller.create
 

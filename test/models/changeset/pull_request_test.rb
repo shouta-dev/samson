@@ -1,9 +1,12 @@
 require_relative '../../test_helper'
 
+SingleCov.covered! uncovered: 9
+
 describe Changeset::PullRequest do
   DataStruct = Struct.new(:user, :merged_by, :body, :title)
   UserStruct = Struct.new(:login)
 
+  let(:project) { projects(:test) }
   let(:data) { DataStruct.new(user, merged_by, body) }
   let(:pr) { Changeset::PullRequest.new("xxx", data) }
   let(:user) { UserStruct.new("foo") }
@@ -29,6 +32,15 @@ describe Changeset::PullRequest do
     end
   end
 
+  describe ".changeset_from_webhook" do
+    it 'finds the pull request' do
+      webhook_data = {'number' => 42, 'pull_request' => {'state' => 'open'}}
+      pr = Changeset::PullRequest.changeset_from_webhook(project, webhook_data)
+
+      pr.state.must_equal 'open'
+    end
+  end
+
   describe "#users" do
     it "returns the users associated with the pull request" do
       pr.users.map(&:login).must_equal ["foo", "bar"]
@@ -51,7 +63,7 @@ describe Changeset::PullRequest do
   describe "#title_without_jira" do
     before do
       GITHUB.stubs(:pull_request).with("foo/bar", 42).returns(data)
-      pr = Changeset::PullRequest.find("foo/bar", 42)
+      Changeset::PullRequest.find("foo/bar", 42)
     end
 
     it "scrubs the JIRA from the PR title (with square brackets)" do
@@ -72,7 +84,7 @@ describe Changeset::PullRequest do
 
     before do
       @original_jira_url_env = ENV['JIRA_BASE_URL']
-      ENV['JIRA_BASE_URL'] = nil  # delete for consistent test environment
+      ENV['JIRA_BASE_URL'] = nil # delete for consistent test environment
     end
 
     after do
@@ -141,7 +153,7 @@ describe Changeset::PullRequest do
       pr.jira_issues.must_equal []
     end
 
-    it "should use full JIRA urls when given, falling back to JIRA_BASE_URL" do
+    it "uses full JIRA urls when given, falling back to JIRA_BASE_URL" do
       ENV['JIRA_BASE_URL'] = 'https://foo.atlassian.net/browse/'
       body.replace(<<-BODY)
         Fixes https://foobar.atlassian.net/browse/XY-123 and AB-666
@@ -153,7 +165,7 @@ describe Changeset::PullRequest do
       ]
     end
 
-    it "should use full URL if given and not auto-generate even when JIRA_BASE_URL is set" do
+    it "uses full URL if given and not auto-generate even when JIRA_BASE_URL is set" do
       ENV['JIRA_BASE_URL'] = 'https://foo.atlassian.net/browse/'
       body.replace(<<-BODY)
         Fixes XY-123, see https://foobar.atlassian.net/browse/XY-123
@@ -255,8 +267,8 @@ describe Changeset::PullRequest do
       "message -123 invalid key",
       "message 1ABC-123 invalid key",
       "message 123-123 invalid key",
-      "should not parse key0MES-123",
-      "should not parse MES-123key",
+      "does not parse key0MES-123",
+      "does not parse MES-123key",
       "MES-123k invalid char",
       "invalid char MES-123k"
     ]
@@ -308,6 +320,23 @@ describe Changeset::PullRequest do
         None
       BODY
       pr.risks.must_equal nil
+    end
+
+    it "finds risks with underline style markdown headers" do
+      body.replace(<<-BODY.strip_heredoc)
+        Risks
+        =====
+          - Snakes
+      BODY
+      pr.risks.must_equal "- Snakes"
+    end
+
+    it "finds risks with closing hashes in atx style markdown headers" do
+      body.replace(<<-BODY.strip_heredoc)
+        ## Risks ##
+          - Planes
+      BODY
+      pr.risks.must_equal "- Planes"
     end
 
     context "with nothing risky" do

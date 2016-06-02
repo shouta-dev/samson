@@ -131,7 +131,13 @@ class GitRepository
   # error: nil
   def capture_stdout(*command, dir: repo_cache_dir)
     Dir.chdir(dir) do
-      env = {"PATH" => ENV["PATH"], "HOME" => ENV["HOME"]} # safer and also fixes locally running with hub gem
+      # safer and also fixes locally running with hub gem
+      env = {
+        "PATH" => ENV["PATH"],
+        "HOME" => ENV["HOME"],
+        "HTTP_PROXY" => ENV["HTTP_PROXY"],
+        "HTTPS_PROXY" => ENV["HTTPS_PROXY"]
+      }
       out = IO.popen(env, command, unsetenv_others: true, err: [:child, :out]) { |io| io.read.strip }
       out if $?.success?
     end

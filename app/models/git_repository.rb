@@ -84,6 +84,7 @@ class GitRepository
   def valid_url?
     return false if repository_url.blank?
     output = capture_stdout "git", "-c", "core.askpass=true", "ls-remote", "-h", repository_url, dir: '.'
+Rails.logger.error(output)
     Rails.logger.error("Repository Path '#{repository_url}' is unreachable") unless output
     !!output
   end
@@ -131,7 +132,7 @@ class GitRepository
   # error: nil
   def capture_stdout(*command, dir: repo_cache_dir)
     Dir.chdir(dir) do
-      env = {"PATH" => ENV["PATH"], "HOME" => ENV["HOME"]} # safer and also fixes locally running with hub gem
+      env = {"PATH" => ENV["PATH"], "HOME" => ENV["HOME"], "HTTP_PROXY" => ENV["HTTP_PROXY"], "HTTPS_PROXY" => ENV["HTTPS_PROXY"]} # safer and also fixes locally running with hub gem
       out = IO.popen(env, command, unsetenv_others: true, err: [:child, :out]) { |io| io.read.strip }
       out if $?.success?
     end
